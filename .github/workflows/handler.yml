@@ -25,5 +25,5 @@ jobs:
           docker build --platform linux/amd64 --output
           "type=image,push=true" --tag
           emilsallem/sparkleaf-handler:$GITHUB_REF_SLUG-$GITHUB_RUN_NUMBER  --tag
-          emilsallem/sparkleaf-handler:$GITHUB_REF_SLUG-latest ./backend/.      
+          emilsallem/sparkleaf-handler:$GITHUB_REF_SLUG-latest .      
       
