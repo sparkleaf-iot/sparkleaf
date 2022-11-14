@@ -19,7 +19,7 @@ jobs:
       - name: Login to DockerHub Registry
         run: >-
           docker login -u ${{ secrets.DOCKERHUB_USERNAME }} -p ${{
-          secrets.DOCKERHUB_PASSWORD }}
+          secrets.DOCKERHUB_TOKEN }}
       - name: Build the Docker image
         run: >-
           docker build --platform linux/amd64 --output
