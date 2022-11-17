@@ -10,6 +10,6 @@ COPY *.go ./
 
 RUN go build -o /handler
 
-EXPOSE 8080
+EXPOSE 80
 
 CMD [ "/handler" ]
