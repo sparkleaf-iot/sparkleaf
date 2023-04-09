@@ -1,0 +1,3 @@
+name: sparkleaf
+runtime: go
+description: Reading plant signals and storing them

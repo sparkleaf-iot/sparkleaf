@@ -1,0 +1,3 @@
+config:
+  gcp:project: sparkleaf
+  nomad:adress: http://localhost:4646
