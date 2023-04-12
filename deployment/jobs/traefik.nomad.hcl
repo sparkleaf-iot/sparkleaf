@@ -28,10 +28,7 @@ job "traefik" {
         args = [
           "--api.dashboard=true",
           "--api.insecure=true", ### For Test only, please do not use that in production
-          "--entrypoints.web.address=:${NOMAD_PORT_http}",
-          "--entrypoints.traefik.address=:${NOMAD_PORT_admin}",
           "--providers.nomad=true",
-          "--providers.nomad.endpoint.address=http://192.168.189.128:4646" ### IP to your nomad server 
         ]
       }
     }
