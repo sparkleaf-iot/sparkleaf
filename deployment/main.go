@@ -4,7 +4,6 @@ import (
 	"os"
 
 	"github.com/pulumi/pulumi-gcp/sdk/v5/go/gcp/compute"
-	"github.com/pulumi/pulumi-nomad/sdk/go/nomad"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
 )
 
@@ -13,7 +12,6 @@ func readFileOrPanic(path string, ctx *pulumi.Context) pulumi.StringInput {
 	if err != nil {
 		panic(err.Error())
 	}
-	ctx.Log.Info(string(data), nil)
 
 	return pulumi.String(string(data))
 }
@@ -23,7 +21,7 @@ func main() {
 
 		// Create a new VPC network for the Nomad server.
 		network, err := compute.NewNetwork(ctx, "nomad-network", &compute.NetworkArgs{
-			AutoCreateSubnetworks: pulumi.Bool(true),
+			AutoCreateSubnetworks: pulumi.Bool(false),
 		})
 		if err != nil {
 			return err
@@ -31,17 +29,25 @@ func main() {
 
 		// Create a new subnet within the VPC network.
 		subnet, err := compute.NewSubnetwork(ctx, "nomad-subnet", &compute.SubnetworkArgs{
-			Region:                pulumi.String("us-central1"),
-			IpCidrRange:           pulumi.String("10.0.1.0/24"),
-			Network:               network.SelfLink,
+			Region:                pulumi.String("europe-central2"),
+			IpCidrRange:           pulumi.String("10.0.0.0/8"),
+			Network:               network.ID(),
 			PrivateIpGoogleAccess: pulumi.Bool(true),
 		})
 		if err != nil {
 			return err
 		}
 
-		static, err := compute.NewAddress(ctx, "static", &compute.AddressArgs{
-			Region: pulumi.String("us-central1"),
+		// static, err := compute.NewAddress(ctx, "static", &compute.AddressArgs{
+		// 	AddressType: pulumi.String("INTERNAL"),
+		// 	Region:      pulumi.String("europe-central2"),
+		// 	Subnetwork:  subnet.ID(),
+		// })
+		// if err != nil {
+		// 	return err
+		// }
+		instanceIp, err := compute.NewAddress(ctx, "static", &compute.AddressArgs{
+			Region: pulumi.String("europe-central2"),
 		})
 		if err != nil {
 			return err
@@ -50,7 +56,7 @@ func main() {
 		// Create a new GCP compute instance to run the Nomad server on.
 		server, err := compute.NewInstance(ctx, "nomad-server", &compute.InstanceArgs{
 			MachineType: pulumi.String("e2-standard-2"),
-			Zone:        pulumi.String("us-central1-a"),
+			Zone:        pulumi.String("europe-central2-a"),
 			BootDisk: &compute.InstanceBootDiskArgs{
 				InitializeParams: &compute.InstanceBootDiskInitializeParamsArgs{
 					Image: pulumi.String("ubuntu-os-cloud/ubuntu-2004-lts"),
@@ -61,7 +67,7 @@ func main() {
 					Network: network.SelfLink,
 					AccessConfigs: compute.InstanceNetworkInterfaceAccessConfigArray{
 						&compute.InstanceNetworkInterfaceAccessConfigArgs{
-							NatIp: static.Address,
+							NatIp: instanceIp.Address,
 						},
 					},
 					Subnetwork: subnet.SelfLink,
@@ -91,24 +97,33 @@ func main() {
 		if err != nil {
 			return err
 		}
-		// Create a new Nomad provider that will connect to the server instance.
-		provider, err := nomad.NewProvider(ctx, "nomad-provider", &nomad.ProviderArgs{
-			Address: static.Address,
-		})
+		// // Create a new Nomad provider that will connect to the server instance.
+		// provider, err := nomad.NewProvider(ctx, "nomad-provider", &nomad.ProviderArgs{
+		// 	Address: static.Address,
+		// })
 
-		if err != nil {
-			return err
-		}
+		// if err != nil {
+		// 	return err
+		// }
 
-		job, err := nomad.NewJob(ctx, "nomad-cluster", &nomad.JobArgs{
-			Jobspec: readFileOrPanic("jobs/traefik.nomad.hcl", ctx),
-		}, pulumi.Provider(provider))
+		// traefikJob, err := nomad.NewJob(ctx, "traefik-cluster", &nomad.JobArgs{
+		// 	Jobspec: readFileOrPanic("jobs/traefik.nomad.hcl", ctx),
+		// }, pulumi.Provider(provider))
 
-		if err != nil {
-			return err
-		}
+		// if err != nil {
+		// 	return err
+		// }
 
-		ctx.Export("job", job.ID())
+		// influxJob, err := nomad.NewJob(ctx, "influx-cluster", &nomad.JobArgs{
+		// 	Jobspec: readFileOrPanic("jobs/influx.nomad.hcl", ctx),
+		// }, pulumi.Provider(provider))
+
+		// if err != nil {
+		// 	return err
+		// }
+
+		// ctx.Export("traefikJob", traefikJob.ID())
+		// ctx.Export("influxJob", influxJob.ID())
 		ctx.Export("server", server.Name)
 
 		return nil
