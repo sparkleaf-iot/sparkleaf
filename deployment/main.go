@@ -4,7 +4,9 @@ import (
 	"os"
 
 	"github.com/pulumi/pulumi-gcp/sdk/v5/go/gcp/compute"
+	"github.com/pulumi/pulumi-nomad/sdk/go/nomad"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
+	"github.com/pulumi/pulumi/sdk/v3/go/pulumi/config"
 )
 
 func readFileOrPanic(path string, ctx *pulumi.Context) pulumi.StringInput {
@@ -18,6 +20,9 @@ func readFileOrPanic(path string, ctx *pulumi.Context) pulumi.StringInput {
 
 func main() {
 	pulumi.Run(func(ctx *pulumi.Context) error {
+		// Get the configuration values from the appropriate yaml.
+		conf := config.New(ctx, "")
+		name := conf.Require("name")
 
 		// Create a new VPC network for the Nomad server.
 		network, err := compute.NewNetwork(ctx, "nomad-network", &compute.NetworkArgs{
@@ -77,6 +82,7 @@ func main() {
 		if err != nil {
 			return err
 		}
+		ctx.Log.Info(instanceIp.Address, nil)
 
 		// Create a firewall rule to allow traffic to the Nomad server.
 		_, err = compute.NewFirewall(ctx, "nomad-firewall", &compute.FirewallArgs{
@@ -97,18 +103,18 @@ func main() {
 		if err != nil {
 			return err
 		}
-		// // Create a new Nomad provider that will connect to the server instance.
-		// provider, err := nomad.NewProvider(ctx, "nomad-provider", &nomad.ProviderArgs{
-		// 	Address: static.Address,
-		// })
+		// Create a new Nomad provider that will connect to the server instance.
+		provider, err := nomad.NewProvider(ctx, "nomad-provider", &nomad.ProviderArgs{
+			Address: instanceIp.Address + pulumi.StringOutput(":4646"),
+		})
 
 		// if err != nil {
 		// 	return err
 		// }
 
-		// traefikJob, err := nomad.NewJob(ctx, "traefik-cluster", &nomad.JobArgs{
-		// 	Jobspec: readFileOrPanic("jobs/traefik.nomad.hcl", ctx),
-		// }, pulumi.Provider(provider))
+		traefikJob, err := nomad.NewJob(ctx, "traefik-cluster", &nomad.JobArgs{
+			Jobspec: readFileOrPanic("jobs/traefik.nomad.hcl", ctx),
+		}, pulumi.Provider(provider))
 
 		// if err != nil {
 		// 	return err
@@ -122,7 +128,7 @@ func main() {
 		// 	return err
 		// }
 
-		// ctx.Export("traefikJob", traefikJob.ID())
+		ctx.Export("traefikJob", traefikJob.ID())
 		// ctx.Export("influxJob", influxJob.ID())
 		ctx.Export("server", server.Name)
 

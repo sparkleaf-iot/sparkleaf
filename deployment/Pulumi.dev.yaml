@@ -1,3 +1,55 @@
 config:
   gcp:project: sparkleaf
   nomad:adress: http://0.0.0.0:4646
+  project:
+  description: "The GCP project to use."
+  region:
+    description: "The GCP region to deploy to."
+
+  zone:
+    description: "The GCP zone to deploy to."
+
+  machine_image:
+    description: "The compute image to use for the server and client machines. Output from the Packer build process."
+
+  name:
+    description: "Prefix used to name various infrastructure components. Alphanumeric characters only."
+    default: "nomad"
+
+  retry_join:
+    description: "Used by Consul to automatically form a cluster."
+    type: string
+
+  allowlist_ip:
+    description: "IP to allow access for the security groups (set 0.0.0.0/0 for world)"
+    default: "0.0.0.0/0"
+
+  server_instance_type:
+    description: "The compute engine instance type to use for servers."
+    default: "e2-micro"
+
+  client_instance_type:
+    description: "The compute engine instance type to use for clients."
+    default: "e2-micro"
+
+  server_count:
+    description: "The number of servers to provision."
+    default: "3"
+
+  client_count:
+    description: "The number of clients to provision."
+    default: "3"
+
+  root_block_device_size:
+    description: "The volume size of the root block device."
+    default: 20
+
+  nomad_consul_token_id:
+    description: "Accessor ID for the Consul ACL token used by Nomad servers and clients. Must be a UUID."
+
+  nomad_consul_token_secret:
+    description: "Secret ID for the Consul ACL token used by Nomad servers and clients. Must be a UUID."
+
+  nomad_binary:
+    description: "URL of a zip file containing a nomad executable to replace the Nomad binaries in the AMI with. Example: https://releases.hashicorp.com/nomad/0.10.0/nomad_0.10.0_linux_amd64.zip"
+    default: ""
