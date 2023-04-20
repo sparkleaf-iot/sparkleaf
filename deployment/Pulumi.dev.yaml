@@ -9,7 +9,9 @@ config:
   zone:
     description: "The GCP zone to deploy to."
 
-  machine_image:
+  machine_image: 
+    type: string
+    value: sparkleaf-20230419153703
     description: "The compute image to use for the server and client machines. Output from the Packer build process."
 
   name:
