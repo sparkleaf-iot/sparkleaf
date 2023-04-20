@@ -1,98 +1,48 @@
 package main
 
 import (
-	"os"
-
 	"github.com/pulumi/pulumi-gcp/sdk/v5/go/gcp/compute"
-	"github.com/pulumi/pulumi-nomad/sdk/go/nomad"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi/config"
 )
 
-func readFileOrPanic(path string, ctx *pulumi.Context) pulumi.StringInput {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		panic(err.Error())
-	}
+// func readFileOrPanic(path string, ctx *pulumi.Context) pulumi.StringInput {
+// 	data, err := os.ReadFile(path)
+// 	if err != nil {
+// 		panic(err.Error())
+// 	}
 
-	return pulumi.String(string(data))
-}
+// 	return pulumi.String(string(data))
+// }
 
 func main() {
 	pulumi.Run(func(ctx *pulumi.Context) error {
 		// Get the configuration values from the appropriate yaml.
-		conf := config.New(ctx, "")
-		name := conf.Require("name")
+		gcpConf := config.New(ctx, "gc")
+		machineImage := gcpConf.Require("machine_image")
 
 		// Create a new VPC network for the Nomad server.
 		network, err := compute.NewNetwork(ctx, "nomad-network", &compute.NetworkArgs{
-			AutoCreateSubnetworks: pulumi.Bool(false),
+			//AutoCreateSubnetworks: pulumi.Bool(false),
 		})
 		if err != nil {
 			return err
 		}
-
-		// Create a new subnet within the VPC network.
-		subnet, err := compute.NewSubnetwork(ctx, "nomad-subnet", &compute.SubnetworkArgs{
-			Region:                pulumi.String("europe-central2"),
-			IpCidrRange:           pulumi.String("10.0.0.0/8"),
-			Network:               network.ID(),
-			PrivateIpGoogleAccess: pulumi.Bool(true),
-		})
-		if err != nil {
-			return err
-		}
-
-		// static, err := compute.NewAddress(ctx, "static", &compute.AddressArgs{
-		// 	AddressType: pulumi.String("INTERNAL"),
-		// 	Region:      pulumi.String("europe-central2"),
-		// 	Subnetwork:  subnet.ID(),
-		// })
-		// if err != nil {
-		// 	return err
-		// }
-		instanceIp, err := compute.NewAddress(ctx, "static", &compute.AddressArgs{
-			Region: pulumi.String("europe-central2"),
-		})
-		if err != nil {
-			return err
-		}
-
-		// Create a new GCP compute instance to run the Nomad server on.
-		server, err := compute.NewInstance(ctx, "nomad-server", &compute.InstanceArgs{
-			MachineType: pulumi.String("e2-standard-2"),
-			Zone:        pulumi.String("europe-central2-a"),
-			BootDisk: &compute.InstanceBootDiskArgs{
-				InitializeParams: &compute.InstanceBootDiskInitializeParamsArgs{
-					Image: pulumi.String("ubuntu-os-cloud/ubuntu-2004-lts"),
-				},
-			},
-			NetworkInterfaces: compute.InstanceNetworkInterfaceArray{
-				&compute.InstanceNetworkInterfaceArgs{
-					Network: network.SelfLink,
-					AccessConfigs: compute.InstanceNetworkInterfaceAccessConfigArray{
-						&compute.InstanceNetworkInterfaceAccessConfigArgs{
-							NatIp: instanceIp.Address,
-						},
-					},
-					Subnetwork: subnet.SelfLink,
-				},
-			},
-		})
-		if err != nil {
-			return err
-		}
-		ctx.Log.Info(instanceIp.Address, nil)
-
 		// Create a firewall rule to allow traffic to the Nomad server.
-		_, err = compute.NewFirewall(ctx, "nomad-firewall", &compute.FirewallArgs{
+		firewall, err := compute.NewFirewall(ctx, "nomad-firewall", &compute.FirewallArgs{
 			Network: network.SelfLink,
 			Allows: compute.FirewallAllowArray{
+				&compute.FirewallAllowArgs{
+					Protocol: pulumi.String("icmp"),
+				},
+
 				&compute.FirewallAllowArgs{
 					Protocol: pulumi.String("tcp"),
 					Ports: pulumi.StringArray{
 						pulumi.String("22"),
 						pulumi.String("4646"),
+						pulumi.String("8500"),
+						pulumi.String("80"),
 					},
 				},
 			},
@@ -103,18 +53,103 @@ func main() {
 		if err != nil {
 			return err
 		}
-		// Create a new Nomad provider that will connect to the server instance.
-		provider, err := nomad.NewProvider(ctx, "nomad-provider", &nomad.ProviderArgs{
-			Address: instanceIp.Address + pulumi.StringOutput(":4646"),
-		})
+
+		// // Create a new subnet within the VPC network.
+		// subnet, err := compute.NewSubnetwork(ctx, "nomad-subnet", &compute.SubnetworkArgs{
+		// 	Region:                pulumi.String("europe-central2"),
+		// 	IpCidrRange:           pulumi.String("10.0.0.0/8"),
+		// 	Network:               network.ID(),
+		// 	PrivateIpGoogleAccess: pulumi.Bool(true),
+		// })
+		// if err != nil {
+		// 	return err
+		// }
+
+		// static, err := compute.NewAddress(ctx, "static", &compute.AddressArgs{
+		// 	AddressType: pulumi.String("INTERNAL"),
+		// 	Region:      pulumi.String("europe-central2"),
+		// 	Subnetwork:  subnet.ID(),
+		// })
+		// if err != nil {
+		// 	return err
+		// }
+		// instanceIp, err := compute.NewAddress(ctx, "static", &compute.AddressArgs{
+		// 	Region: pulumi.String("europe-central2"),
+		// })
+		// if err != nil {
+		// 	return err
+		// }
+
+		//test script
+		startupScript := `#!/bin/bash
+		echo "Hello, World!" > index.html
+		nohup python -m SimpleHTTPServer 80 &`
+		// Create a new GCP compute instance to run the Nomad servers on.
+		server, err := compute.NewInstance(ctx, "nomad-server", &compute.InstanceArgs{
+			MachineType:            pulumi.String("e2-micro"),
+			Zone:                   pulumi.String("europe-central2-a"),
+			MetadataStartupScript:  pulumi.String(startupScript),
+			AllowStoppingForUpdate: pulumi.Bool(true),
+			BootDisk: &compute.InstanceBootDiskArgs{
+				InitializeParams: &compute.InstanceBootDiskInitializeParamsArgs{
+					Image: pulumi.String(machineImage),
+				},
+			},
+			NetworkInterfaces: compute.InstanceNetworkInterfaceArray{
+				&compute.InstanceNetworkInterfaceArgs{
+					Network: network.ID(),
+					AccessConfigs: &compute.InstanceNetworkInterfaceAccessConfigArray{
+						&compute.InstanceNetworkInterfaceAccessConfigArgs{},
+					},
+					// Subnetwork: subnet.SelfLink,
+				},
+			},
+			ServiceAccount: &compute.InstanceServiceAccountArgs{
+				Scopes: pulumi.StringArray{
+					pulumi.String("https://www.googleapis.com/auth/cloud-platform"),
+				},
+			},
+		}, pulumi.DependsOn([]pulumi.Resource{firewall}))
+		if err != nil {
+			return err
+		}
+		// // Create a new GCP compute instance to run the Nomad cleints on.
+		// client, err := compute.NewInstance(ctx, "nomad-client", &compute.InstanceArgs{
+		// 	MachineType: pulumi.String("e2-standard-2"),
+		// 	Zone:        pulumi.String("europe-central2-a"),
+		// 	BootDisk: &compute.InstanceBootDiskArgs{
+		// 		InitializeParams: &compute.InstanceBootDiskInitializeParamsArgs{
+		// 			Image: pulumi.String(machineImage),
+		// 		},
+		// 	},
+		// 	NetworkInterfaces: compute.InstanceNetworkInterfaceArray{
+		// 		&compute.InstanceNetworkInterfaceArgs{
+		// 			Network: network.SelfLink,
+		// 			AccessConfigs: compute.InstanceNetworkInterfaceAccessConfigArray{
+		// 				&compute.InstanceNetworkInterfaceAccessConfigArgs{
+		// 					NatIp: instanceIp.Address,
+		// 				},
+		// 			},
+		// 			Subnetwork: subnet.SelfLink,
+		// 		},
+		// 	},
+		// })
+		// if err != nil {
+		// 	return err
+		// }
+
+		// // Create a new Nomad provider that will connect to the server instance.
+		// provider, err := nomad.NewProvider(ctx, "nomad-provider", &nomad.ProviderArgs{
+		// 	Address: instanceIp.Address,
+		// })
 
 		// if err != nil {
 		// 	return err
 		// }
 
-		traefikJob, err := nomad.NewJob(ctx, "traefik-cluster", &nomad.JobArgs{
-			Jobspec: readFileOrPanic("jobs/traefik.nomad.hcl", ctx),
-		}, pulumi.Provider(provider))
+		// traefikJob, err := nomad.NewJob(ctx, "traefik-cluster", &nomad.JobArgs{
+		// 	Jobspec: readFileOrPanic("jobs/traefik.nomad.hcl", ctx),
+		// })
 
 		// if err != nil {
 		// 	return err
@@ -128,9 +163,11 @@ func main() {
 		// 	return err
 		// }
 
-		ctx.Export("traefikJob", traefikJob.ID())
+		// ctx.Export("traefikJob", traefikJob.ID())
 		// ctx.Export("influxJob", influxJob.ID())
 		ctx.Export("server", server.Name)
+		ctx.Export("instanceIP", server.NetworkInterfaces.Index(pulumi.Int(0)).AccessConfigs().Index(pulumi.Int(0)).NatIp())
+		// ctx.Export("cleint", client.Name)
 
 		return nil
 	})
