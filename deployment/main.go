@@ -4,16 +4,18 @@ import (
 	"github.com/pulumi/pulumi-gcp/sdk/v5/go/gcp/compute"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi/config"
+	"os"
 )
 
-// func readFileOrPanic(path string, ctx *pulumi.Context) pulumi.StringInput {
-// 	data, err := os.ReadFile(path)
-// 	if err != nil {
-// 		panic(err.Error())
-// 	}
+func readFileOrPanic(path string, ctx *pulumi.Context) string {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		panic(err.Error())
+	}
 
-// 	return pulumi.String(string(data))
-// }
+	// return pulumi.String(string(data))
+	return string(data)
+}
 
 func main() {
 	pulumi.Run(func(ctx *pulumi.Context) error {
@@ -23,7 +25,7 @@ func main() {
 
 		// Create a new VPC network for the Nomad server.
 		network, err := compute.NewNetwork(ctx, "nomad-network", &compute.NetworkArgs{
-			//AutoCreateSubnetworks: pulumi.Bool(false),
+			AutoCreateSubnetworks: pulumi.Bool(true),
 		})
 		if err != nil {
 			return err
@@ -81,14 +83,15 @@ func main() {
 		// }
 
 		//test script
-		startupScript := `#!/bin/bash
-		echo "Hello, World!" > index.html
-		nohup python -m SimpleHTTPServer 80 &`
+		// startupScript := `#!/bin/bash
+		// echo "Hello, World!" > index.html
+		// nohup python -m SimpleHTTPServer 80 &`
+		serverStartupScript := readFileOrPanic("config/user-data-server.sh", ctx)
 		// Create a new GCP compute instance to run the Nomad servers on.
 		server, err := compute.NewInstance(ctx, "nomad-server", &compute.InstanceArgs{
 			MachineType:            pulumi.String("e2-micro"),
 			Zone:                   pulumi.String("europe-central2-a"),
-			MetadataStartupScript:  pulumi.String(startupScript),
+			MetadataStartupScript:  pulumi.String(serverStartupScript),
 			AllowStoppingForUpdate: pulumi.Bool(true),
 			BootDisk: &compute.InstanceBootDiskArgs{
 				InitializeParams: &compute.InstanceBootDiskInitializeParamsArgs{
