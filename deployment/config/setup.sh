@@ -101,6 +101,15 @@ sudo mkdir -p $NOMADCONFIGDIR
 sudo chmod 755 $NOMADCONFIGDIR
 sudo mkdir -p $NOMADDIR
 sudo chmod 755 $NOMADDIR
+sudo mv $CONFIGDIR/server.hcl $NOMADCONFIGDIR/server.hcl
+sudo mv $CONFIGDIR/client.hcl $NOMADCONFIGDIR/client.hcl
+sudo mv $CONFIGDIR/nomad.service /etc/systemd/system/nomad.service
+sudo mv $CONFIGDIR/nomad.hcl $NOMADCONFIGDIR/nomad.hcl
+echo nomad version
+
+## Start
+sudo systemctl enable nomad
+sudo systemctl start nomad
 
 # Consul Template 
 
@@ -110,6 +119,7 @@ curl -L $CONSULTEMPLATEDOWNLOAD > consul-template.zip
 sudo unzip consul-template.zip -d /usr/local/bin
 sudo chmod 0755 /usr/local/bin/consul-template
 sudo chown root:root /usr/local/bin/consul-template
+
 
 ## Configure
 sudo mkdir -p $CONSULTEMPLATECONFIGDIR
@@ -131,3 +141,4 @@ sudo add-apt-repository -y ppa:openjdk-r/ppa
 sudo apt-get update 
 sudo apt-get install -y openjdk-8-jdk
 JAVA_HOME=$(readlink -f /usr/bin/java | sed "s:bin/java::")
+
