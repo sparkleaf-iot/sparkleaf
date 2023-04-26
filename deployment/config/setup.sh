@@ -101,15 +101,10 @@ sudo mkdir -p $NOMADCONFIGDIR
 sudo chmod 755 $NOMADCONFIGDIR
 sudo mkdir -p $NOMADDIR
 sudo chmod 755 $NOMADDIR
-sudo mv $CONFIGDIR/server.hcl $NOMADCONFIGDIR/server.hcl
-sudo mv $CONFIGDIR/client.hcl $NOMADCONFIGDIR/client.hcl
 sudo mv $CONFIGDIR/nomad.service /etc/systemd/system/nomad.service
 sudo mv $CONFIGDIR/nomad.hcl $NOMADCONFIGDIR/nomad.hcl
-echo nomad version
 
-## Start
-sudo systemctl enable nomad
-sudo systemctl start nomad
+
 
 # Consul Template 
 
