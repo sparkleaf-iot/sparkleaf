@@ -2,7 +2,9 @@ package main
 
 import (
 	"os"
+	"strings"
 
+	"github.com/google/uuid"
 	"github.com/pulumi/pulumi-gcp/sdk/v5/go/gcp/compute"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi/config"
@@ -18,11 +20,17 @@ func readFileOrPanic(path string, ctx *pulumi.Context) string {
 	return string(data)
 }
 
+func injectToken(token string, script string) string {
+	return strings.Replace(script, "BOOTSTRAP_TOKEN_PLACEHOLDER", token, 1)
+}
+
 func main() {
 	pulumi.Run(func(ctx *pulumi.Context) error {
 		// Get the configuration values from the appropriate yaml.
 		gcpConf := config.New(ctx, "gc")
 		machineImage := gcpConf.Require("machine_image")
+		// Create a bootstrap token for Consul and Nomad
+		bootstrap_token := uuid.NewString()
 
 		// Create a new VPC network for the Nomad server.
 		network, err := compute.NewNetwork(ctx, "nomad-network", &compute.NetworkArgs{
@@ -87,37 +95,9 @@ func main() {
 			return err
 		}
 
-		// // Create a new subnet within the VPC network.
-		// subnet, err := compute.NewSubnetwork(ctx, "nomad-subnet", &compute.SubnetworkArgs{
-		// 	Region:                pulumi.String("europe-central2"),
-		// 	IpCidrRange:           pulumi.String("10.0.0.0/8"),
-		// 	Network:               network.ID(),
-		// 	PrivateIpGoogleAccess: pulumi.Bool(true),
-		// })
-		// if err != nil {
-		// 	return err
-		// }
-
-		// static, err := compute.NewAddress(ctx, "static", &compute.AddressArgs{
-		// 	AddressType: pulumi.String("INTERNAL"),
-		// 	Region:      pulumi.String("europe-central2"),
-		// 	Subnetwork:  subnet.ID(),
-		// })
-		// if err != nil {
-		// 	return err
-		// }
-		// instanceIp, err := compute.NewAddress(ctx, "static", &compute.AddressArgs{
-		// 	Region: pulumi.String("europe-central2"),
-		// })
-		// if err != nil {
-		// 	return err
-		// }
-
-		//test script
-		// startupScript := `#!/bin/bash
-		// echo "Hello, World!" > index.html
-		// nohup python -m SimpleHTTPServer 80 &`
 		serverStartupScript := readFileOrPanic("config/server.sh", ctx)
+		serverStartupScript = injectToken(bootstrap_token, serverStartupScript)
+
 		// Create a new GCP compute instance to run the Nomad servers on.
 		server, err := compute.NewInstance(ctx, "nomad-server", &compute.InstanceArgs{
 			MachineType:            pulumi.String("e2-micro"),
@@ -150,6 +130,7 @@ func main() {
 		}
 
 		clientStartupScript := readFileOrPanic("config/client.sh", ctx)
+		clientStartupScript = injectToken(bootstrap_token, clientStartupScript)
 
 		// Create a new GCP compute instance to run the Nomad cleints on.
 		client, err := compute.NewInstance(ctx, "nomad-client", &compute.InstanceArgs{
@@ -182,15 +163,6 @@ func main() {
 			return err
 		}
 
-		// // Create a new Nomad provider that will connect to the server instance.
-		// provider, err := nomad.NewProvider(ctx, "nomad-provider", &nomad.ProviderArgs{
-		// 	Address: instanceIp.Address,
-		// })
-
-		// if err != nil {
-		// 	return err
-		// }
-
 		// traefikJob, err := nomad.NewJob(ctx, "traefik-cluster", &nomad.JobArgs{
 		// 	Jobspec: readFileOrPanic("jobs/traefik.nomad.hcl", ctx),
 		// })
@@ -213,6 +185,7 @@ func main() {
 		ctx.Export("serverIP", server.NetworkInterfaces.Index(pulumi.Int(0)).AccessConfigs().Index(pulumi.Int(0)).NatIp())
 		ctx.Export("client", client.Name)
 		ctx.Export("clientIP", client.NetworkInterfaces.Index(pulumi.Int(0)).AccessConfigs().Index(pulumi.Int(0)).NatIp())
+		ctx.Export("bootstrap_token", pulumi.ToOutput(bootstrap_token))
 		// ctx.Export("cleint", client.Name)
 
 		return nil

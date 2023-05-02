@@ -72,6 +72,9 @@ sudo chmod 755 $CONSULCONFIGDIR
 sudo mkdir -p $CONSULDIR
 sudo chmod 755 $CONSULDIR
 
+sudo cp $CONFIGDIR/consul.service /etc/systemd/system/consul.service
+
+
 # Vault
 
 #curl -L $VAULTDOWNLOAD > vault.zip

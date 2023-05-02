@@ -12,6 +12,7 @@ variable "zone" {
 
 source "googlecompute" "sparkleaf" {
   image_name   = "sparkleaf-${local.timestamp}"
+  
   project_id   = var.project
   source_image = "ubuntu-minimal-2204-jammy-v20230420"
   ssh_username = "packer"

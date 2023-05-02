@@ -7,7 +7,7 @@ CONSULCONFIGDIR=/etc/consul.d
 NOMADCONFIGDIR=/etc/nomad.d
 CONSULTEMPLATECONFIGDIR=/etc/consul-template.d
 HOME_DIR=ubuntu
-
+BOOTSTRAP_TOKEN=BOOTSTRAP_TOKEN_PLACEHOLDER
 # Wait for network
 sleep 15
 
@@ -16,10 +16,10 @@ IP_ADDRESS=$(curl -H "Metadata-Flavor: Google" http://metadata/computeMetadata/v
 
 
 # Consul
+sed -i "s/BOOTSTRAP_TOKEN/$BOOTSTRAP_TOKEN/g" $CONFIGDIR/consul-client.hcl
 sed -i "s/IP_ADDRESS/$IP_ADDRESS/g" $CONFIGDIR/consul-client.hcl
 #sed -i "s/RETRY_JOIN/$RETRY_JOIN/g" $CONFIGDIR/consul-client.hcl
-sudo mv $CONFIGDIR/consul_client.hcl $CONSULCONFIGDIR/consul.hcl
-sudo mv $CONFIGDIR/consul.service /etc/systemd/system/consul.service
+sudo cp $CONFIGDIR/consul-client.hcl $CONSULCONFIGDIR
 
 sudo systemctl enable consul.service
 sudo systemctl start consul.service

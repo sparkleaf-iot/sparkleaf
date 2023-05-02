@@ -9,12 +9,17 @@ acl {
     enabled = true
     default_policy = "deny"
     down_policy = "extend-cache"
+    tokens {
+      agent = "BOOTSTRAP_TOKEN"
+  }
 }
 
 log_level = "INFO"
 
 server = true
-ui = true
+ui_config {
+  enabled = true
+}
 retry_join = ["RETRY_JOIN"]
 
 service {

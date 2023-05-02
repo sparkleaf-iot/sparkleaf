@@ -1,7 +1,7 @@
 # Packer variables (all are required)
 project                   = "sparkleaf"
 region                    = "europe-central2"
-zone                      = "europe-central2-a"
+zone                      = "europe-central2-b"
 
 # Terraform variables (all are required)
 // retry_join                = "project_name=GCP_PROJECT_ID provider=gce tag_value=auto-join"
