@@ -21,6 +21,7 @@ func readFileOrPanic(path string, ctx *pulumi.Context) string {
 }
 
 func injectToken(token string, script string) string {
+	
 	return strings.Replace(script, "BOOTSTRAP_TOKEN_PLACEHOLDER", token, 1)
 }
 
@@ -96,8 +97,8 @@ func main() {
 		}
 
 		serverStartupScript := readFileOrPanic("config/server.sh", ctx)
-		serverStartupScript = injectToken(bootstrap_token, serverStartupScript)
-
+		//serverStartupScript = injectToken(bootstrap_token, serverStartupScript)
+		ctx.Log.Info(serverStartupScript, nil)
 		// Create a new GCP compute instance to run the Nomad servers on.
 		server, err := compute.NewInstance(ctx, "nomad-server", &compute.InstanceArgs{
 			MachineType:            pulumi.String("e2-micro"),
