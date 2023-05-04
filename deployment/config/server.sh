@@ -23,8 +23,14 @@ sleep 10
 set +e
 OUTPUT=$(consul acl bootstrap 2>&1)
 sudo touch /ops/config/token.txt
+BOOTSTRAP_TOKEN=$(echo $OUTPUT | grep -i secretid | awk '{print $4}')
+sudo echo $BOOTSTRAP_TOKEN > /ops/config/token.txt
 
-sudo echo $OUTPUT > /ops/config/token.txt
+consul acl policy create -name 'nomad-auto-join' -rules="@$CONFIGDIR/consul-acl-nomad-auto-join.hcl" -token=$BOOTSTRAP_TOKEN
+
+consul acl role create -name "nomad-auto-join" -description "Role with policies necessary for nomad servers and clients to auto-join via Consul." -policy-name "nomad-auto-join" -token=$BOOTSTRAP_TOKEN
+
+consul acl token create -accessor=nomad_consul_token_id -secret=nomad_consul_token_secret -description "Nomad server/client auto-join token" -role-name nomad-auto-join -token=$BOOTSTRAP_TOKEN
 
 #sed -i "s/BOOTSTRAP_TOKEN/$BOOTSTRAP_TOKEN/g" $CONFIGDIR/consul.hcl
 consul reload

@@ -20,9 +20,9 @@ func readFileOrPanic(path string, ctx *pulumi.Context) string {
 	return string(data)
 }
 
-func injectToken(token string, script string) string {
-	
-	return strings.Replace(script, "BOOTSTRAP_TOKEN_PLACEHOLDER", token, 1)
+func injectToken(token string, toBeReplaced string, script string) string {
+
+	return strings.Replace(script, toBeReplaced, token, 1)
 }
 
 func main() {
@@ -31,7 +31,8 @@ func main() {
 		gcpConf := config.New(ctx, "gc")
 		machineImage := gcpConf.Require("machine_image")
 		// Create a bootstrap token for Consul and Nomad
-		bootstrap_token := uuid.NewString()
+		nomad_consul_token_id := uuid.NewString()
+		nomad_consul_token_secret := uuid.NewString()
 
 		// Create a new VPC network for the Nomad server.
 		network, err := compute.NewNetwork(ctx, "nomad-network", &compute.NetworkArgs{
@@ -97,7 +98,8 @@ func main() {
 		}
 
 		serverStartupScript := readFileOrPanic("config/server.sh", ctx)
-		//serverStartupScript = injectToken(bootstrap_token, serverStartupScript)
+		serverStartupScript = injectToken(nomad_consul_token_id, "nomad_consul_token_id", serverStartupScript)
+		serverStartupScript = injectToken(nomad_consul_token_secret, "nomad_consul_token_secret", serverStartupScript)
 		ctx.Log.Info(serverStartupScript, nil)
 		// Create a new GCP compute instance to run the Nomad servers on.
 		server, err := compute.NewInstance(ctx, "nomad-server", &compute.InstanceArgs{
@@ -131,7 +133,7 @@ func main() {
 		}
 
 		clientStartupScript := readFileOrPanic("config/client.sh", ctx)
-		clientStartupScript = injectToken(bootstrap_token, clientStartupScript)
+		//clientStartupScript = injectToken(bootstrap_token, clientStartupScript)
 
 		// Create a new GCP compute instance to run the Nomad cleints on.
 		client, err := compute.NewInstance(ctx, "nomad-client", &compute.InstanceArgs{
@@ -186,7 +188,9 @@ func main() {
 		ctx.Export("serverIP", server.NetworkInterfaces.Index(pulumi.Int(0)).AccessConfigs().Index(pulumi.Int(0)).NatIp())
 		ctx.Export("client", client.Name)
 		ctx.Export("clientIP", client.NetworkInterfaces.Index(pulumi.Int(0)).AccessConfigs().Index(pulumi.Int(0)).NatIp())
-		ctx.Export("bootstrap_token", pulumi.ToOutput(bootstrap_token))
+		ctx.Export("nomad_id", pulumi.ToOutput(nomad_consul_token_id))
+		ctx.Export("nomad_token", pulumi.ToOutput(nomad_consul_token_secret))
+
 		// ctx.Export("cleint", client.Name)
 
 		return nil

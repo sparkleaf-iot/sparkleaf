@@ -20,7 +20,7 @@ server = true
 ui_config {
   enabled = true
 }
-retry_join = ["RETRY_JOIN"]
+retry_join = ["project_name=sparkleaf provider=gce tag_value=auto-join"]
 
 service {
     name = "consul"
