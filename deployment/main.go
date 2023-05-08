@@ -20,9 +20,9 @@ func readFileOrPanic(path string, ctx *pulumi.Context) string {
 	return string(data)
 }
 
-func injectToken(token string, toBeReplaced string, script string) string {
+func injectToken(token string, toBeReplaced string, script string, amount int) string {
 
-	return strings.Replace(script, toBeReplaced, token, 1)
+	return strings.Replace(script, toBeReplaced, token, amount)
 }
 
 func main() {
@@ -98,8 +98,8 @@ func main() {
 		}
 
 		serverStartupScript := readFileOrPanic("config/server.sh", ctx)
-		serverStartupScript = injectToken(nomad_consul_token_id, "nomad_consul_token_id", serverStartupScript)
-		serverStartupScript = injectToken(nomad_consul_token_secret, "nomad_consul_token_secret", serverStartupScript)
+		serverStartupScript = injectToken(nomad_consul_token_id, "nomad_consul_token_id", serverStartupScript, 1)
+		serverStartupScript = injectToken(nomad_consul_token_secret, "nomad_consul_token_secret", serverStartupScript, 2)
 		ctx.Log.Info(serverStartupScript, nil)
 		// Create a new GCP compute instance to run the Nomad servers on.
 		server, err := compute.NewInstance(ctx, "nomad-server", &compute.InstanceArgs{
