@@ -6,6 +6,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/pulumi/pulumi-gcp/sdk/v5/go/gcp/compute"
+	"github.com/pulumi/pulumi-nomad/sdk/go/nomad"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi/config"
 )
@@ -167,13 +168,13 @@ func main() {
 			return err
 		}
 
-		// traefikJob, err := nomad.NewJob(ctx, "traefik-cluster", &nomad.JobArgs{
-		// 	Jobspec: readFileOrPanic("jobs/traefik.nomad.hcl", ctx),
-		// })
+		traefikJob, err := nomad.NewJob(ctx, "traefik-cluster", &nomad.JobArgs{
+			Jobspec: pulumi.String(readFileOrPanic("jobs/traefik.nomad.hcl", ctx)),
+		})
 
-		// if err != nil {
-		// 	return err
-		// }
+		if err != nil {
+			return err
+		}
 
 		// influxJob, err := nomad.NewJob(ctx, "influx-cluster", &nomad.JobArgs{
 		// 	Jobspec: readFileOrPanic("jobs/influx.nomad.hcl", ctx),
@@ -183,7 +184,7 @@ func main() {
 		// 	return err
 		// }
 
-		// ctx.Export("traefikJob", traefikJob.ID())
+		ctx.Export("traefikJob", traefikJob.ID())
 		// ctx.Export("influxJob", influxJob.ID())
 		ctx.Export("server", server.Name)
 		ctx.Export("serverIP", server.NetworkInterfaces.Index(pulumi.Int(0)).AccessConfigs().Index(pulumi.Int(0)).NatIp())

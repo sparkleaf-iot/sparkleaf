@@ -15,6 +15,10 @@ NOMAD_USER_TOKEN="/tmp/nomad_user_token"
 sed -i "s/IP_ADDRESS/$IP_ADDRESS/g" $CONFIGDIR/consul.hcl
 #sed -i "s/SERVER_COUNT/$SERVER_COUNT/g" $CONFIGDIR/consul.hcl
 #sed -i "s/RETRY_JOIN/$RETRY_JOIN/g" $CONFIGDIR/consul.hcl
+
+# Add hostname to /etc/hosts
+echo "127.0.0.1 $(hostname)" | sudo tee --append /etc/hosts
+
 sudo cp $CONFIGDIR/consul.hcl $CONSULCONFIGDIR
 
 sudo systemctl enable consul.service

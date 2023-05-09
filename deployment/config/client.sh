@@ -15,6 +15,9 @@ sleep 15
 # Replace token in nomad client config
 sed -i "s/CONSUL_TOKEN/nomad_consul_token_secret/g" $CONFIGDIR/nomad-client.hcl
 
+# Add hostname to /etc/hosts
+echo "127.0.0.1 $(hostname)" | sudo tee --append /etc/hosts
+
 # Fetch ip of current vm instance
 IP_ADDRESS=$(curl -H "Metadata-Flavor: Google" http://metadata/computeMetadata/v1/instance/network-interfaces/0/ip)
 export NOMAD_ADDR=http://$IP_ADDRESS:4646
