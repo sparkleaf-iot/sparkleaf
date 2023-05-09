@@ -133,6 +133,7 @@ func main() {
 		}
 
 		clientStartupScript := readFileOrPanic("config/client.sh", ctx)
+		clientStartupScript = injectToken(nomad_consul_token_secret, "nomad_consul_token_secret", clientStartupScript, 1)
 		//clientStartupScript = injectToken(bootstrap_token, clientStartupScript)
 
 		// Create a new GCP compute instance to run the Nomad cleints on.

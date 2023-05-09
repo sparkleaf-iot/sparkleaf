@@ -48,8 +48,10 @@ sudo systemctl start nomad
 sleep 10
 OUTPUT=$(nomad acl bootstrap 2>&1)
 sudo touch /ops/config/nomad-token.txt
-sudo echo $OUTPUT > /ops/config/nomad-token.txt
-NOMAD_BOOTSTRAP_TOKEN=$(cat /ops/config/nomad-token.txt | grep -i secret | awk -F '=' '{print $3}' | xargs | sed 's/.....$// | 'awk 'NF')
+sudo touch /ops/config/nomad-output.txt
+
+sudo echo $OUTPUT > /ops/config/nomad-output.txt
+NOMAD_BOOTSTRAP_TOKEN=$(cat /ops/config/nomad-output.txt | grep -i secret | awk -F '=' '{print $3}' | xargs | sed 's/.....$//' | awk 'NF' )
 sudo echo $NOMAD_BOOTSTRAP_TOKEN > /ops/config/nomad-token.txt
 
 nomad acl policy apply -token=$NOMAD_BOOTSTRAP_TOKEN -description "Policy to allow reading of agents and nodes and listing and submitting jobs in all namespaces." node-read-job-submit $CONFIGDIR/nomad-acl-user.hcl
@@ -57,4 +59,4 @@ nomad acl policy apply -token=$NOMAD_BOOTSTRAP_TOKEN -description "Policy to all
 nomad acl token create -token=$NOMAD_BOOTSTRAP_TOKEN -name "read-token" -policy node-read-job-submit | grep -i secret | awk -F "=" '{print $2}' | xargs > $NOMAD_USER_TOKEN
 
 # Write user token to kv
-consul kv put -token=$CONSUL_BOOTSTRAP_TOKEN nomad_user_token $NOMAD_USER_TOKEN
+consul kv put -token=$CONSUL_BOOTSTRAP_TOKEN nomad_user_token $NOMAD_BOOTSTRAP_TOKEN
