@@ -3,7 +3,11 @@ package main
 import (
 	"os"
 	"strings"
-
+	"encoding/json"
+	"time"
+	"io/ioutil"
+	"log"
+	"net/http"
 	"github.com/google/uuid"
 	"github.com/pulumi/pulumi-gcp/sdk/v5/go/gcp/compute"
 	"github.com/pulumi/pulumi-nomad/sdk/go/nomad"
@@ -19,6 +23,70 @@ func readFileOrPanic(path string, ctx *pulumi.Context) string {
 
 	// return pulumi.String(string(data))
 	return string(data)
+}
+
+func getAccessToken(url string, token string) string {
+	
+	// Create an HTTP client
+	client := &http.Client{}
+
+	// Create an HTTP request
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// Set the Authorization header
+	req.Header.Set("Authorization", "Bearer "+token)
+
+	log.Println(req)
+
+
+	resp, err := client.Do(req)
+	// Send the request and get the response
+	for i := 0; i < 10; i++ {
+		resp, err = client.Do(req)
+		if err != nil {
+			time.Sleep(time.Second * 10)
+			log.Println("Retrying...")
+		} else { 
+			break
+		}
+	}
+	if err != nil {
+		log.Fatal(err)
+
+	}
+	log.Println(resp)
+	defer resp.Body.Close()
+
+	// Read the response body
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// Extract the value from the response body
+	var response []struct {
+		Value string `json:"Value"`
+	}
+	log.Println(response)
+
+	err = json.Unmarshal(body, &response)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	if len(response) > 0 {
+		value := response[0].Value
+		
+		return value
+	} else {
+		log.Fatal("Value not found in the response")
+		return ""
+	}
+
+
 }
 
 func injectToken(token string, toBeReplaced string, script string, amount int) string {
@@ -101,11 +169,10 @@ func main() {
 		serverStartupScript := readFileOrPanic("config/server.sh", ctx)
 		serverStartupScript = injectToken(nomad_consul_token_id, "nomad_consul_token_id", serverStartupScript, 1)
 		serverStartupScript = injectToken(nomad_consul_token_secret, "nomad_consul_token_secret", serverStartupScript, 2)
-		ctx.Log.Info(serverStartupScript, nil)
 		// Create a new GCP compute instance to run the Nomad servers on.
 		server, err := compute.NewInstance(ctx, "nomad-server", &compute.InstanceArgs{
 			MachineType:            pulumi.String("e2-micro"),
-			Zone:                   pulumi.String("europe-central2-a"),
+			Zone:                   pulumi.String("europe-central2-b"),
 			MetadataStartupScript:  pulumi.String(serverStartupScript),
 			AllowStoppingForUpdate: pulumi.Bool(true),
 			Tags:                   pulumi.StringArray{pulumi.String("auto-join")},
@@ -140,7 +207,7 @@ func main() {
 		// Create a new GCP compute instance to run the Nomad cleints on.
 		client, err := compute.NewInstance(ctx, "nomad-client", &compute.InstanceArgs{
 			MachineType:            pulumi.String("e2-micro"),
-			Zone:                   pulumi.String("europe-central2-a"),
+			Zone:                   pulumi.String("europe-central2-b"),
 			MetadataStartupScript:  pulumi.String(clientStartupScript),
 			AllowStoppingForUpdate: pulumi.Bool(true),
 			Tags:                   pulumi.StringArray{pulumi.String("auto-join")},
@@ -167,14 +234,27 @@ func main() {
 		if err != nil {
 			return err
 		}
+		//url :=  pulumi.Sprintf("http://%s:4646", server.NetworkInterfaces.Index(pulumi.Int(0)).AccessConfigs().Index(pulumi.Int(0)).NatIp())
+		natIp := server.NetworkInterfaces.Index(pulumi.Int(0)).AccessConfigs().Index(pulumi.Int(0)).NatIp()
+        url := natIp.ApplyT(func(ip *string) string {
+            return "http://" + *ip + ":4646"
+        }).(pulumi.StringOutput)
 
-		traefikJob, err := nomad.NewJob(ctx, "traefik-cluster", &nomad.JobArgs{
-			Jobspec: pulumi.String(readFileOrPanic("jobs/traefik.nomad.hcl", ctx)),
-		})
+		provider, err := nomad.NewProvider(ctx, "nomad", &nomad.ProviderArgs{
+			Address: url,
+			SecretId: pulumi.String(nomad_consul_token_secret),
+		}, pulumi.DependsOn([]pulumi.Resource{server}))
 
 		if err != nil {
 			return err
 		}
+		// traefikJob, err := nomad.NewJob(ctx, "traefik-cluster", &nomad.JobArgs{
+		// 	Jobspec: pulumi.String(readFileOrPanic("jobs/traefik.nomad.hcl", ctx)),
+		// }, pulumi.Provider(provider))
+
+		// if err != nil {
+		// 	return err
+		// }
 
 		// influxJob, err := nomad.NewJob(ctx, "influx-cluster", &nomad.JobArgs{
 		// 	Jobspec: readFileOrPanic("jobs/influx.nomad.hcl", ctx),
@@ -183,8 +263,17 @@ func main() {
 		// if err != nil {
 		// 	return err
 		// }
+		consulKvUrl := natIp.ApplyT(func(ip *string) string {
+			return "http://" + *ip + ":8500/v1/kv/nomad_user_token/"
+		}).(pulumi.StringOutput)
+		accessToken := consulKvUrl.ApplyT(
+			func(url string) string {
+				return getAccessToken(url, nomad_consul_token_secret)
+		}).(pulumi.StringOutput) 
 
-		ctx.Export("traefikJob", traefikJob.ID())
+		ctx.Export("nomad_job_token", accessToken)
+		//ctx.Export("traefikJob", traefikJob.ID())
+		ctx.Export("provider", provider.ID())
 		// ctx.Export("influxJob", influxJob.ID())
 		ctx.Export("server", server.Name)
 		ctx.Export("serverIP", server.NetworkInterfaces.Index(pulumi.Int(0)).AccessConfigs().Index(pulumi.Int(0)).NatIp())
