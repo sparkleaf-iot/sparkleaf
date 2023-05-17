@@ -63,4 +63,4 @@ nomad acl policy apply -token=$NOMAD_BOOTSTRAP_TOKEN -description "Policy to all
 nomad acl token create -token=$NOMAD_BOOTSTRAP_TOKEN -name "read-token" -policy node-read-job-submit | grep -i secret | awk -F "=" '{print $2}' | xargs > $NOMAD_USER_TOKEN
 
 # Write user token to kv
-consul kv put -token=$CONSUL_BOOTSTRAP_TOKEN nomad_user_token $( cat $NOMAD_USER_TOKEN)
+consul kv put -token=$CONSUL_BOOTSTRAP_TOKEN nomad_user_token $(cat $NOMAD_USER_TOKEN)
