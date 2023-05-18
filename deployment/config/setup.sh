@@ -74,22 +74,6 @@ sudo chmod 755 $CONSULDIR
 
 sudo cp $CONFIGDIR/consul.service /etc/systemd/system/consul.service
 
-
-# Vault
-
-#curl -L $VAULTDOWNLOAD > vault.zip
-
-# ## Install
-# sudo unzip vault.zip -d /usr/local/bin
-# sudo chmod 0755 /usr/local/bin/vault
-# sudo chown root:root /usr/local/bin/vault
-
-# ## Configure
-# sudo mkdir -p $VAULTCONFIGDIR
-# sudo chmod 755 $VAULTCONFIGDIR
-# sudo mkdir -p $VAULTDIR
-# sudo chmod 755 $VAULTDIR
-
 # Nomad
 
 curl -L $NOMADDOWNLOAD > nomad.zip

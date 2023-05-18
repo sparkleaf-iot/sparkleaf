@@ -36,11 +36,7 @@ consul acl role create -name "nomad-auto-join" -description "Role with policies 
 
 consul acl token create -accessor=nomad_consul_token_id -secret=nomad_consul_token_secret -description "Nomad server/client auto-join token" -role-name nomad-auto-join -token=$CONSUL_BOOTSTRAP_TOKEN
 
-#sed -i "s/BOOTSTRAP_TOKEN/$BOOTSTRAP_TOKEN/g" $CONFIGDIR/consul.hcl
 consul reload
-
-#consul acl policy create -name 'consul-user' -rules="@$CONFIGDIR/consul-acl-user.hcl" -token-file=$BOOTSTRAP_TOKEN
-#consul acl role create -name "consul-user" -description "Role to login to consul" -policy-name "nomad-auto-join" -token-file=$BOOTSTRAP_TOKEN
 
 # Move the config for server setup
 sudo mv $CONFIGDIR/nomad-server.hcl $NOMADCONFIGDIR/nomad-server.hcl
@@ -57,6 +53,7 @@ sudo touch /ops/config/nomad-output.txt
 sudo echo $OUTPUT > /ops/config/nomad-output.txt
 NOMAD_BOOTSTRAP_TOKEN=$(cat /ops/config/nomad-output.txt | grep -i secret | awk -F '=' '{print $3}' | xargs | sed 's/.....$//' | awk 'NF' )
 sudo echo $NOMAD_BOOTSTRAP_TOKEN > /ops/config/nomad-token.txt
+
 
 nomad acl policy apply -token=$NOMAD_BOOTSTRAP_TOKEN -description "Policy to allow reading of agents and nodes and listing and submitting jobs in all namespaces." node-read-job-submit $CONFIGDIR/nomad-acl-user.hcl
 

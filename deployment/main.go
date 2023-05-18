@@ -22,27 +22,22 @@ func readFileOrPanic(path string, ctx *pulumi.Context) string {
 	if err != nil {
 		panic(err.Error())
 	}
-
-	// return pulumi.String(string(data))
 	return string(data)
 }
 
 func getAccessToken(url string, token string) string {
-
-	// Create an HTTP client
+	// Querying the Consul KV store to fetch the access token
 	client := &http.Client{}
 
-	// Create an HTTP request
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	// Set the Authorization header
 	req.Header.Set("Authorization", "Bearer "+token)
 
 	resp, err := client.Do(req)
-	// Send the request and get the response
+	// Retry till Consul is ready
 	for i := 0; i < 10; i++ {
 		resp, err = client.Do(req)
 		if err != nil || resp.StatusCode != 200 {
@@ -67,21 +62,19 @@ func getAccessToken(url string, token string) string {
 	var response []struct {
 		Value string `json:"Value"`
 	}
-	log.Println(response)
-
 	err = json.Unmarshal(body, &response)
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	if len(response) > 0 {
+		// Resp is base64 encoded, TODO figure out better way
 		value64 := response[0].Value
 		value, err := base64.StdEncoding.DecodeString(value64)
 		if err != nil {
 			log.Fatal(err)
 		}
 
-		log.Println(value)
 		return string(value)
 	} else {
 		log.Fatal("Value not found in the response")
@@ -208,8 +201,6 @@ func main() {
 
 		clientStartupScript := readFileOrPanic("config/client.sh", ctx)
 		clientStartupScript = injectToken(nomad_consul_token_secret, "nomad_consul_token_secret", clientStartupScript, 1)
-		//clientStartupScript = injectToken(bootstrap_token, clientStartupScript)
-
 		// Create a new GCP compute instance to run the Nomad cleints on.
 		client, err := compute.NewInstance(ctx, "nomad-client", &compute.InstanceArgs{
 			MachineType:            pulumi.String("e2-micro"),
@@ -240,7 +231,6 @@ func main() {
 		if err != nil {
 			return err
 		}
-		//url :=  pulumi.Sprintf("http://%s:4646", server.NetworkInterfaces.Index(pulumi.Int(0)).AccessConfigs().Index(pulumi.Int(0)).NatIp())
 		natIp := server.NetworkInterfaces.Index(pulumi.Int(0)).AccessConfigs().Index(pulumi.Int(0)).NatIp()
 
 		url := natIp.ApplyT(func(ip *string) string {
@@ -289,8 +279,6 @@ func main() {
 		ctx.Export("clientIP", client.NetworkInterfaces.Index(pulumi.Int(0)).AccessConfigs().Index(pulumi.Int(0)).NatIp())
 		ctx.Export("nomad_id", pulumi.ToOutput(nomad_consul_token_id))
 		ctx.Export("nomad_token", pulumi.ToOutput(nomad_consul_token_secret))
-
-		// ctx.Export("cleint", client.Name)
 
 		return nil
 	})
