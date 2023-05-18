@@ -186,7 +186,6 @@ func main() {
 					AccessConfigs: &compute.InstanceNetworkInterfaceAccessConfigArray{
 						&compute.InstanceNetworkInterfaceAccessConfigArgs{},
 					},
-					// Subnetwork: subnet.SelfLink,
 				},
 			},
 			ServiceAccount: &compute.InstanceServiceAccountArgs{
