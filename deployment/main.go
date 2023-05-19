@@ -261,23 +261,45 @@ func main() {
 			return err
 		}
 
-		traefikJob, err := nomad.NewJob(ctx, "traefik-cluster", &nomad.JobArgs{
+		traefikJob, err := nomad.NewJob(ctx, "traefik", &nomad.JobArgs{
 			Jobspec: pulumi.String(readFileOrPanic("jobs/traefik.nomad.hcl", ctx)),
-		}, pulumi.Provider(provider), pulumi.ReplaceOnChanges([]string{"jobspec"}), pulumi.DeleteBeforeReplace(true), pulumi.DependsOn([]pulumi.Resource{server}))
+		}, pulumi.Provider(provider), pulumi.ReplaceOnChanges([]string{"jobspec"}), pulumi.DeleteBeforeReplace(true), pulumi.DependsOn([]pulumi.Resource{provider}))
 
 		if err != nil {
 			return err
 		}
+
+		csiControllerJob, err := nomad.NewJob(ctx, "csi-controller", &nomad.JobArgs{
+			Jobspec: pulumi.String(readFileOrPanic("jobs/csi-controller.nomad.hcl", ctx)),
+		}, pulumi.Provider(provider), pulumi.ReplaceOnChanges([]string{"jobspec"}), pulumi.DeleteBeforeReplace(true), pulumi.DependsOn([]pulumi.Resource{provider}))
+
+		if err != nil {
+			return err
+		}
+
+		_, err = nomad.NewJob(ctx, "csi-node", &nomad.JobArgs{
+			Jobspec: pulumi.String(readFileOrPanic("jobs/csi-node.nomad.hcl", ctx)),
+		}, pulumi.Provider(provider), pulumi.ReplaceOnChanges([]string{"jobspec"}), pulumi.DeleteBeforeReplace(true), pulumi.DependsOn([]pulumi.Resource{provider}))
+
+		if err != nil {
+			return err
+		}
+		// _, err = nomad.GetPlugins(ctx, nil, nil, pulumi.Provider(provider))
+		// if err != nil {
+		// 	return err
+		// }
+
+
 		ctx.Export("nomad_job_token", accessToken)
-		ctx.Export("traefikJob", traefikJob.ID())
-		ctx.Export("provider", provider.ID())
 		// ctx.Export("influxJob", influxJob.ID())
+		ctx.Export("traefikJob", traefikJob.ID())
+		ctx.Export("csiControllerJob", csiControllerJob.ID())
 		ctx.Export("server", server.Name)
 		ctx.Export("serverIP", server.NetworkInterfaces.Index(pulumi.Int(0)).AccessConfigs().Index(pulumi.Int(0)).NatIp())
 		ctx.Export("client", client.Name)
 		ctx.Export("clientIP", client.NetworkInterfaces.Index(pulumi.Int(0)).AccessConfigs().Index(pulumi.Int(0)).NatIp())
 		ctx.Export("nomad_id", pulumi.ToOutput(nomad_consul_token_id))
-		ctx.Export("nomad_token", pulumi.ToOutput(nomad_consul_token_secret))
+		ctx.Export("consul_token", pulumi.ToOutput(nomad_consul_token_secret))
 
 		return nil
 	})
