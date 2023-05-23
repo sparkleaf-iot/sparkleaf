@@ -5,7 +5,7 @@ job "controller" {
       driver = "docker"
       template {
         data = <<EOH
-{{ key "service_account" }}
+{{ key " GOOGLE_APPLICATION_CREDENTIALS" }}
 EOH
   destination = "secrets/creds.json"
       }
