@@ -162,6 +162,12 @@ func main() {
 			return err
 		}
 
+		_, err = compute.NewDisk(ctx, "influxdisk", &compute.DiskArgs{
+			Size: pulumi.Int(10),
+			Type: pulumi.String("pd-standard"),
+			Zone: pulumi.String("europe-central2-b"),
+		})
+
 		serverStartupScript := readFileOrPanic("config/server.sh", ctx)
 		serverStartupScript = injectToken(nomad_consul_token_id, "nomad_consul_token_id", serverStartupScript, 1)
 		serverStartupScript = injectToken(nomad_consul_token_secret, "nomad_consul_token_secret", serverStartupScript, 2)
@@ -260,6 +266,13 @@ func main() {
 		if err != nil {
 			return err
 		}
+		// csiPlugin, err := nomad.GetPlugin(ctx, &nomad.GetPluginArgs{
+		// 	PluginId:       "gcepd",
+		// 	WaitForHealthy: pulumi.BoolRef(true),
+		// }, nil)
+		// if err != nil {
+		// 	return err
+		// }
 
 		traefikJob, err := nomad.NewJob(ctx, "traefik", &nomad.JobArgs{
 			Jobspec: pulumi.String(readFileOrPanic("jobs/traefik.nomad.hcl", ctx)),
@@ -284,11 +297,24 @@ func main() {
 		if err != nil {
 			return err
 		}
-		// _, err = nomad.GetPlugins(ctx, nil, nil, pulumi.Provider(provider))
+		// _, err = nomad.NewVolume(ctx, "influxVolume", &nomad.VolumeArgs{
+		// 	Type:       pulumi.String("csi"),
+		// 	PluginId:   pulumi.String("gcepd"),
+		// 	VolumeId:   pulumi.String("influx_volume"),
+		// 	ExternalId: influxDisk.ID(),
+		// 	Capabilities: nomad.VolumeCapabilityArray{
+		// 		&nomad.VolumeCapabilityArgs{
+		// 			AccessMode:     pulumi.String("single-node-writer"),
+		// 			AttachmentMode: pulumi.String("file-system"),
+		// 		},
+		// 	},
+		// 	MountOptions: &nomad.VolumeMountOptionsArgs{
+		// 		FsType: pulumi.String("ext4"),
+		// 	},
+		// }, pulumi.Provider(provider), pulumi.DependsOn([]pulumi.Resource{csiControllerJob, csiNodeJob}), pulumi.ReplaceOnChanges([]string{"*"}))
 		// if err != nil {
 		// 	return err
 		// }
-
 
 		ctx.Export("nomad_job_token", accessToken)
 		// ctx.Export("influxJob", influxJob.ID())
