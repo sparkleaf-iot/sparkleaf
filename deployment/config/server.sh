@@ -8,6 +8,7 @@ NOMADCONFIGDIR=/etc/nomad.d
 CONSULTEMPLATECONFIGDIR=/etc/consul-template.d
 HOME_DIR=ubuntu
 IP_ADDRESS=$(curl -H "Metadata-Flavor: Google" http://metadata/computeMetadata/v1/instance/network-interfaces/0/ip)
+SERVICE_ACCOUNT_KEY=SERVICE_ACCOUNT_KEY_PLACEHOLDER
 SERVICE_ACCOUNT=$(curl -H "Metadata-Flavor: Google" http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token) 
 CONSUL_BOOTSTRAP_TOKEN=BOOTSTRAP_TOKEN_PLACEHOLDER
 NOMAD_BOOTSTRAP_TOKEN=BOOTSTRAP_TOKEN_PLACEHOLDER
@@ -63,5 +64,6 @@ nomad acl token create -token=$NOMAD_BOOTSTRAP_TOKEN -name "read-token" -policy 
 # Write user token to kv
 consul kv put -token=$CONSUL_BOOTSTRAP_TOKEN nomad_user_token $(cat $NOMAD_USER_TOKEN)
 # Write service account to kv, used for the csi driver plugin
-consul kv put -token=$CONSUL_BOOTSTRAP_TOKEN GOOGLE_APPLICATION_CREDENTIALS $SERVICE_ACCOUNT
+DECODED_KEY=$(echo $SERVICE_ACCOUNT | base64 --decode)
+consul kv put -token=$CONSUL_BOOTSTRAP_TOKEN service_account $DECODED_KEY
 

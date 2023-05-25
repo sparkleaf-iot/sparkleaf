@@ -15,6 +15,7 @@ import (
 	"github.com/pulumi/pulumi-nomad/sdk/go/nomad"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi/config"
+	"github.com/pulumi/pulumi-gcp/sdk/v6/go/gcp/serviceAccount"
 )
 
 func readFileOrPanic(path string, ctx *pulumi.Context) string {
@@ -161,6 +162,20 @@ func main() {
 		if err != nil {
 			return err
 		}
+		serviceAccount, err := serviceAccount.GetAccount(ctx, &serviceaccount.GetAccountArgs{
+			AccountId: "103532104736224563314",
+		}, nil)
+		if err != nil {
+			return err
+		}
+		serviceAccountKey, err = serviceAccount.NewKey(ctx, "instanceKey", &serviceAccount.KeyArgs{
+			ServiceAccountId: serviceAccount.Name,
+		})
+		if err != nil {
+			return err
+		}
+		
+
 
 		_, err = compute.NewDisk(ctx, "influxdisk", &compute.DiskArgs{
 			Size: pulumi.Int(10),
@@ -171,6 +186,7 @@ func main() {
 		serverStartupScript := readFileOrPanic("config/server.sh", ctx)
 		serverStartupScript = injectToken(nomad_consul_token_id, "nomad_consul_token_id", serverStartupScript, 1)
 		serverStartupScript = injectToken(nomad_consul_token_secret, "nomad_consul_token_secret", serverStartupScript, 2)
+		serverStartupScript = injectToken(serviceAccountKey.PrivateKey, "SERVICE_ACCOUNT_KEY_PLACEHOLDER", serverStartupScript, 1)
 		// Create a new GCP compute instance to run the Nomad servers on.
 		server, err := compute.NewInstance(ctx, "nomad-server", &compute.InstanceArgs{
 			MachineType:           pulumi.String("e2-micro"),

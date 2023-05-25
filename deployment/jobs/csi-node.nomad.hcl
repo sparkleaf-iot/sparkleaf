@@ -6,7 +6,7 @@ job "nodes" {
       driver = "docker"
       template {
         data = <<EOH
-{{ key " GOOGLE_APPLICATION_CREDENTIALS" }}
+{{ key "service_account" }}
 EOH
   destination = "secrets/creds.json"
       }
