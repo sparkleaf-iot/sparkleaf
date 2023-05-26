@@ -11,11 +11,11 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/pulumi/pulumi-gcp/sdk/v5/go/gcp/compute"
+	"github.com/pulumi/pulumi-gcp/sdk/v6/go/gcp/compute"
 	"github.com/pulumi/pulumi-nomad/sdk/go/nomad"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi/config"
-	"github.com/pulumi/pulumi-gcp/sdk/v6/go/gcp/serviceAccount"
+	"github.com/pulumi/pulumi-gcp/sdk/v6/go/gcp/serviceaccount"
 )
 
 func readFileOrPanic(path string, ctx *pulumi.Context) string {
@@ -30,7 +30,7 @@ func getAccessToken(url string, token string) string {
 	// Querying the Consul KV store to fetch the access token
 	client := &http.Client{}
 
-	req, err := http.NewRequest("GET", url, nil)
+	req, err := http.NewRequest("GET", url + "nomad_user_token", nil)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -82,6 +82,34 @@ func getAccessToken(url string, token string) string {
 		return ""
 	}
 
+}
+
+func setAccountKey(url string, key string, token string) string {
+	// Querying the Consul KV store to fetch the access token
+	client := &http.Client{}
+
+	req, err := http.NewRequest("PUT", url + "service_account", nil)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	req.Header.Set("Authorization", "Bearer "+token)
+	resp, err := client.Do(req)
+	// Retry till Consul is ready
+	for i := 0; i < 10; i++ {
+		resp, err = client.Do(req)
+		if err != nil || resp.StatusCode != 200 {
+			time.Sleep(time.Second * 20)
+			log.Println("Retrying...")
+		} else {
+			break
+		}
+	}
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer resp.Body.Close()
+	return key
 }
 
 func injectToken(token string, toBeReplaced string, script string, amount int) string {
@@ -162,13 +190,16 @@ func main() {
 		if err != nil {
 			return err
 		}
-		serviceAccount, err := serviceAccount.GetAccount(ctx, &serviceaccount.GetAccountArgs{
-			AccountId: "103532104736224563314",
-		}, nil)
+		serviceAccount, err := serviceaccount.NewAccount(ctx, "serviceAccount", &serviceaccount.AccountArgs{
+			AccountId:   pulumi.String("server-account"),
+			DisplayName: pulumi.String("Vm server service account"),
+		})
+
+			
 		if err != nil {
 			return err
 		}
-		serviceAccountKey, err = serviceAccount.NewKey(ctx, "instanceKey", &serviceAccount.KeyArgs{
+		serviceAccountKey, err := serviceaccount.NewKey(ctx, "instanceKey", &serviceaccount.KeyArgs{
 			ServiceAccountId: serviceAccount.Name,
 		})
 		if err != nil {
@@ -185,8 +216,8 @@ func main() {
 
 		serverStartupScript := readFileOrPanic("config/server.sh", ctx)
 		serverStartupScript = injectToken(nomad_consul_token_id, "nomad_consul_token_id", serverStartupScript, 1)
-		serverStartupScript = injectToken(nomad_consul_token_secret, "nomad_consul_token_secret", serverStartupScript, 2)
-		serverStartupScript = injectToken(serviceAccountKey.PrivateKey, "SERVICE_ACCOUNT_KEY_PLACEHOLDER", serverStartupScript, 1)
+		serverStartupScript = injectToken(nomad_consul_token_secret, "nomad_consul_token_secret", serverStartupScript, 2)			
+		
 		// Create a new GCP compute instance to run the Nomad servers on.
 		server, err := compute.NewInstance(ctx, "nomad-server", &compute.InstanceArgs{
 			MachineType:           pulumi.String("e2-micro"),
@@ -215,7 +246,7 @@ func main() {
 					pulumi.String("https://www.googleapis.com/auth/cloud-platform"),
 				},
 			},
-		}, pulumi.DependsOn([]pulumi.Resource{firewall, internalFirewall}))
+		}, pulumi.DependsOn([]pulumi.Resource{firewall, internalFirewall, serviceAccountKey}))
 		if err != nil {
 			return err
 		}
@@ -266,8 +297,14 @@ func main() {
 		// 	return err
 		// }
 		consulKvUrl := natIp.ApplyT(func(ip *string) string {
-			return "http://" + *ip + ":8500/v1/kv/nomad_user_token"
+			return "http://" + *ip + ":8500/v1/kv/"
 		}).(pulumi.StringOutput)
+
+		accountKey := pulumi.All(consulKvUrl, serviceAccountKey.PrivateKey).ApplyT(
+			func(args []interface{}) string {
+				return setAccountKey(args[0].(string), args[1].(string), nomad_consul_token_secret)
+			})
+
 		accessToken := consulKvUrl.ApplyT(
 			func(url string) string {
 				return getAccessToken(url, nomad_consul_token_secret)
@@ -342,6 +379,7 @@ func main() {
 		ctx.Export("clientIP", client.NetworkInterfaces.Index(pulumi.Int(0)).AccessConfigs().Index(pulumi.Int(0)).NatIp())
 		ctx.Export("nomad_id", pulumi.ToOutput(nomad_consul_token_id))
 		ctx.Export("consul_token", pulumi.ToOutput(nomad_consul_token_secret))
+		ctx.Export("account_key", accountKey)
 
 		return nil
 	})
