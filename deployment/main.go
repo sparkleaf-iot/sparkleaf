@@ -9,6 +9,7 @@ import (
 	"os"
 	"strings"
 	"time"
+	"bytes"
 
 	"github.com/google/uuid"
 	"github.com/pulumi/pulumi-gcp/sdk/v6/go/gcp/compute"
@@ -30,30 +31,21 @@ func getAccessToken(url string, token string) string {
 	// Querying the Consul KV store to fetch the access token
 	client := &http.Client{}
 
-	req, err := http.NewRequest("GET", url + "nomad_user_token", nil)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	req.Header.Set("Authorization", "Bearer "+token)
-
-	resp, err := client.Do(req)
+	
 	// Retry till Consul is ready
 	for i := 0; i < 10; i++ {
-		resp, err = client.Do(req)
+		req, err := http.NewRequest("GET", url + "nomad_user_token", nil)
+		if err != nil {
+			log.Fatal(err)
+		}
+		req.Header.Set("Authorization", "Bearer "+token)
+		resp, err := client.Do(req)
 		if err != nil || resp.StatusCode != 200 {
-			time.Sleep(time.Second * 20)
+			time.Sleep(time.Second * 15)
 			log.Println("Retrying...")
 		} else {
-			break
-		}
-	}
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer resp.Body.Close()
-
-	// Read the response body
+			defer resp.Body.Close()
+			// Read the response body
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		log.Fatal(err)
@@ -81,35 +73,49 @@ func getAccessToken(url string, token string) string {
 		log.Fatal("Value not found in the response")
 		return ""
 	}
+			
+		}
+	}
+	
+
+	return "Timeout error"
 
 }
 
-func setAccountKey(url string, key string, token string) string {
+func setAccountKey(url string, key64 string, token string) []byte {
 	// Querying the Consul KV store to fetch the access token
 	client := &http.Client{}
-
-	req, err := http.NewRequest("PUT", url + "service_account", nil)
+	key, err := base64.StdEncoding.DecodeString(key64)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	req.Header.Set("Authorization", "Bearer "+token)
-	resp, err := client.Do(req)
+	
 	// Retry till Consul is ready
 	for i := 0; i < 10; i++ {
-		resp, err = client.Do(req)
-		if err != nil || resp.StatusCode != 200 {
-			time.Sleep(time.Second * 20)
-			log.Println("Retrying...")
-		} else {
-			break
+		req, err := http.NewRequest(http.MethodPut, url + "service_account", bytes.NewBuffer([]byte(key)))
+		if err != nil {
+			log.Fatal(err)
 		}
+
+		req.Header.Set("Authorization", "Bearer "+token)
+		req.Header.Set("Content-Type", "application/json")
+		resp, err := client.Do(req)
+			if err != nil || resp.StatusCode != 200 {
+				time.Sleep(time.Second * 15)
+				log.Println("Retrying...")
+			} else {
+				body, err := ioutil.ReadAll(resp.Body)
+				if err != nil {
+					log.Fatal(err)
+				}
+				defer resp.Body.Close()
+				return body
+			}
 	}
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer resp.Body.Close()
-	return key
+	
+	
+	return []byte("Timeout error")
 }
 
 func injectToken(token string, toBeReplaced string, script string, amount int) string {
@@ -208,7 +214,7 @@ func main() {
 		
 
 
-		_, err = compute.NewDisk(ctx, "influxdisk", &compute.DiskArgs{
+		influxDisk, err := compute.NewDisk(ctx, "influxdisk", &compute.DiskArgs{
 			Size: pulumi.Int(10),
 			Type: pulumi.String("pd-standard"),
 			Zone: pulumi.String("europe-central2-b"),
@@ -301,10 +307,9 @@ func main() {
 		}).(pulumi.StringOutput)
 
 		accountKey := pulumi.All(consulKvUrl, serviceAccountKey.PrivateKey).ApplyT(
-			func(args []interface{}) string {
+			func(args []interface{}) []byte {
 				return setAccountKey(args[0].(string), args[1].(string), nomad_consul_token_secret)
 			})
-
 		accessToken := consulKvUrl.ApplyT(
 			func(url string) string {
 				return getAccessToken(url, nomad_consul_token_secret)
@@ -319,13 +324,7 @@ func main() {
 		if err != nil {
 			return err
 		}
-		// csiPlugin, err := nomad.GetPlugin(ctx, &nomad.GetPluginArgs{
-		// 	PluginId:       "gcepd",
-		// 	WaitForHealthy: pulumi.BoolRef(true),
-		// }, nil)
-		// if err != nil {
-		// 	return err
-		// }
+		
 
 		traefikJob, err := nomad.NewJob(ctx, "traefik", &nomad.JobArgs{
 			Jobspec: pulumi.String(readFileOrPanic("jobs/traefik.nomad.hcl", ctx)),
@@ -343,31 +342,43 @@ func main() {
 			return err
 		}
 
-		_, err = nomad.NewJob(ctx, "csi-node", &nomad.JobArgs{
+		csiNodeJob, err := nomad.NewJob(ctx, "csi-node", &nomad.JobArgs{
 			Jobspec: pulumi.String(readFileOrPanic("jobs/csi-node.nomad.hcl", ctx)),
 		}, pulumi.Provider(provider), pulumi.ReplaceOnChanges([]string{"jobspec"}), pulumi.DeleteBeforeReplace(true), pulumi.DependsOn([]pulumi.Resource{provider}))
 
 		if err != nil {
 			return err
 		}
-		// _, err = nomad.NewVolume(ctx, "influxVolume", &nomad.VolumeArgs{
-		// 	Type:       pulumi.String("csi"),
-		// 	PluginId:   pulumi.String("gcepd"),
-		// 	VolumeId:   pulumi.String("influx_volume"),
-		// 	ExternalId: influxDisk.ID(),
-		// 	Capabilities: nomad.VolumeCapabilityArray{
-		// 		&nomad.VolumeCapabilityArgs{
-		// 			AccessMode:     pulumi.String("single-node-writer"),
-		// 			AttachmentMode: pulumi.String("file-system"),
-		// 		},
-		// 	},
-		// 	MountOptions: &nomad.VolumeMountOptionsArgs{
-		// 		FsType: pulumi.String("ext4"),
-		// 	},
-		// }, pulumi.Provider(provider), pulumi.DependsOn([]pulumi.Resource{csiControllerJob, csiNodeJob}), pulumi.ReplaceOnChanges([]string{"*"}))
-		// if err != nil {
-		// 	return err
-		// }
+
+		csiPlugin:= nomad.GetPluginOutput(ctx, nomad.GetPluginOutputArgs{
+			PluginId:       pulumi.String("gcepd"),
+			WaitForHealthy: pulumi.Bool(true),
+		}, nil)
+		
+
+		_ = csiPlugin.Id().ApplyT(func(id string) (interface{}, error) {
+
+			volume, err := nomad.NewVolume(ctx, "influxVolume", &nomad.VolumeArgs{
+				Type:       pulumi.String("csi"),
+				PluginId:  pulumi.String("gcepd"),
+				VolumeId:   pulumi.String("influx_volume"),
+				ExternalId: influxDisk.ID(),
+				Capabilities: nomad.VolumeCapabilityArray{
+					&nomad.VolumeCapabilityArgs{
+						AccessMode:     pulumi.String("single-node-writer"),
+						AttachmentMode: pulumi.String("file-system"),
+					},
+				},
+				MountOptions: &nomad.VolumeMountOptionsArgs{
+					FsType: pulumi.String("ext4"),
+				},
+		}, pulumi.Provider(provider), pulumi.DependsOn([]pulumi.Resource{provider, csiControllerJob, csiNodeJob}))
+		if err != nil {
+			return nil, err
+		}
+		return volume, err
+	})
+		
 
 		ctx.Export("nomad_job_token", accessToken)
 		// ctx.Export("influxJob", influxJob.ID())

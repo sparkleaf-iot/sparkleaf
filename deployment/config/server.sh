@@ -64,6 +64,6 @@ nomad acl token create -token=$NOMAD_BOOTSTRAP_TOKEN -name "read-token" -policy 
 # Write user token to kv
 consul kv put -token=$CONSUL_BOOTSTRAP_TOKEN nomad_user_token $(cat $NOMAD_USER_TOKEN)
 # Write service account to kv, used for the csi driver plugin
-DECODED_KEY=$(echo $SERVICE_ACCOUNT | base64 --decode)
-consul kv put -token=$CONSUL_BOOTSTRAP_TOKEN service_account $DECODED_KEY
+#DECODED_KEY=$(echo $SERVICE_ACCOUNT | base64 --decode)
+#consul kv put -token=$CONSUL_BOOTSTRAP_TOKEN service_account $DECODED_KEY
 
