@@ -157,6 +157,7 @@ func main() {
 						pulumi.String("8080"),
 						pulumi.String("8081"),
 						pulumi.String("80"),
+						pulumi.String("8086"),
 					},
 				},
 			},
