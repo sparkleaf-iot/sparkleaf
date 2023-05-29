@@ -17,6 +17,7 @@ import (
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi/config"
 	"github.com/pulumi/pulumi-gcp/sdk/v6/go/gcp/serviceaccount"
+	"github.com/pulumi/pulumi-gcp/sdk/v6/go/gcp/projects"
 )
 
 func readFileOrPanic(path string, ctx *pulumi.Context) string {
@@ -205,6 +206,15 @@ func main() {
 		if err != nil {
 			return err
 		}
+		_, err = projects.NewIAMMember(ctx, "disk-iam", &projects.IAMMemberArgs{
+			Project:          pulumi.String("sparkleaf"),
+			Role:             pulumi.String("projects/sparkleaf/roles/diskIo"),
+			Member:           serviceAccount.Member,
+		})
+		if err != nil {
+			return err
+		}
+
 		serviceAccountKey, err := serviceaccount.NewKey(ctx, "instanceKey", &serviceaccount.KeyArgs{
 			ServiceAccountId: serviceAccount.Name,
 		})
@@ -295,13 +305,7 @@ func main() {
 			return "http://" + *ip + ":4646"
 		}).(pulumi.StringOutput)
 
-		// influxJob, err := nomad.NewJob(ctx, "influx-cluster", &nomad.JobArgs{
-		// 	Jobspec: readFileOrPanic("jobs/influx.nomad.hcl", ctx),
-		// }, pulumi.Provider(provider))
-
-		// if err != nil {
-		// 	return err
-		// }
+		
 		consulKvUrl := natIp.ApplyT(func(ip *string) string {
 			return "http://" + *ip + ":8500/v1/kv/"
 		}).(pulumi.StringOutput)
@@ -378,12 +382,22 @@ func main() {
 		}
 		return volume, err
 	})
+
+		influxJob, err := nomad.NewJob(ctx, "influx-cluster", &nomad.JobArgs{
+			Jobspec: pulumi.String(readFileOrPanic("jobs/influx.nomad.hcl", ctx)),
+		}, pulumi.Provider(provider), pulumi.DependsOn([]pulumi.Resource{csiControllerJob, csiNodeJob}))
+
+		if err != nil {
+			return err
+		}
 		
 
 		ctx.Export("nomad_job_token", accessToken)
 		// ctx.Export("influxJob", influxJob.ID())
 		ctx.Export("traefikJob", traefikJob.ID())
 		ctx.Export("csiControllerJob", csiControllerJob.ID())
+		ctx.Export("influxJob", influxJob.ID())
+
 		ctx.Export("server", server.Name)
 		ctx.Export("serverIP", server.NetworkInterfaces.Index(pulumi.Int(0)).AccessConfigs().Index(pulumi.Int(0)).NatIp())
 		ctx.Export("client", client.Name)

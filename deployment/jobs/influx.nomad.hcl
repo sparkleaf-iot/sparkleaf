@@ -4,9 +4,11 @@ job "influxdb" {
   group "influxdb" {
 
     volume "influxdb" {
-      type      = "host"
-      source    = "influxdb"
+      type      = "csi"
+      source    = "influx_volume"
       read_only = false
+      access_mode = "single-node-writer"
+      attachment_mode = "file-system"
     }
 
     network {
@@ -28,7 +30,7 @@ job "influxdb" {
       }
 
       env {
-        INFLUXDB_DB = "mydb"
+        INFLUXDB_DB = "maindb"
         INFLUXDB_ADMIN_USER = "admin"
         INFLUXDB_ADMIN_PASSWORD = "password"
       }
@@ -37,11 +39,11 @@ job "influxdb" {
         name = "influxdb"
         port = "http"
         provider = "nomad"
-        check {
-          type     = "tcp"
-          interval = "10s"
-          timeout  = "2s"
-        }
+        // check {
+        //   type     = "tcp"
+        //   interval = "10s"
+        //   timeout  = "2s"
+        // }
       }
     }
   }
