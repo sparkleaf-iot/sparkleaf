@@ -7,7 +7,7 @@ acl {
   # Specify the resource that this rule applies to
   # In this case, we allow all resources by using the wildcard "*"
   # You can replace this with a specific resource or path as needed
-  rules = """
+  rules = """ 
     key "" {
       policy = "write"
     }
@@ -20,5 +20,6 @@ acl {
     session "" {
       policy = "write"
     }
+    
   """
 }
