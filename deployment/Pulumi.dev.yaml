@@ -3,4 +3,5 @@ config:
   gc:machine_image: sparkleaf-20230609134838
   nomad:address: http://0.0.0.0:4646
   retry_join: "project_name=sparkleaf provider=gce tag_value=auto-join"
+  instance_count: 3
 
