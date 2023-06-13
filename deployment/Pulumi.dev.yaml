@@ -1,6 +1,7 @@
 config:
   gcp:project: sparkleaf
-  gc:machine_image: sparkleaf-20230608142448
+  gc:machine_image: sparkleaf-20230613113655
   nomad:address: http://0.0.0.0:4646
   retry_join: "project_name=sparkleaf provider=gce tag_value=auto-join"
+  instance_count: 3
 
