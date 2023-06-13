@@ -7,13 +7,15 @@ CONSULCONFIGDIR=/etc/consul.d
 NOMADCONFIGDIR=/etc/nomad.d
 CONSULTEMPLATECONFIGDIR=/etc/consul-template.d
 HOME_DIR=ubuntu
-BOOTSTRAP_TOKEN=BOOTSTRAP_TOKEN_PLACEHOLDER
+BOOTSTRAP_TOKEN=nomad_consul_token_secret
 CLOUD_ENV=gce
 
 # Wait for network
 sleep 15
 # Replace token in nomad client config
 sed -i "s/CONSUL_TOKEN/nomad_consul_token_secret/g" $CONFIGDIR/nomad-client.hcl
+
+
 
 # Add hostname to /etc/hosts
 echo "127.0.0.1 $(hostname)" | sudo tee --append /etc/hosts

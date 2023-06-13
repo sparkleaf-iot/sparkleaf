@@ -13,8 +13,11 @@ SERVICE_ACCOUNT=$(curl -H "Metadata-Flavor: Google" http://metadata.google.inter
 CONSUL_BOOTSTRAP_TOKEN=BOOTSTRAP_TOKEN_PLACEHOLDER
 NOMAD_BOOTSTRAP_TOKEN=BOOTSTRAP_TOKEN_PLACEHOLDER
 NOMAD_USER_TOKEN="/tmp/nomad_user_token"
+INSTANCE_NUMBER=INSTANCE_NUMBER_PLACEHOLDER
 # Consul
 sed -i "s/IP_ADDRESS/$IP_ADDRESS/g" $CONFIGDIR/consul.hcl
+sed -i "s/BOOTSTRAP_TOKEN/$CONSUL_BOOTSTRAP_TOKEN/g" $CONFIGDIR/consul.hcl
+
 #sed -i "s/SERVER_COUNT/$SERVER_COUNT/g" $CONFIGDIR/consul.hcl
 #sed -i "s/RETRY_JOIN/$RETRY_JOIN/g" $CONFIGDIR/consul.hcl
 
@@ -26,6 +29,8 @@ sudo cp $CONFIGDIR/consul.hcl $CONSULCONFIGDIR
 sudo systemctl enable consul.service
 sudo systemctl start consul.service
 sleep 10
+export CONSUL_HTTP_ADDR=$IP_ADDRESS:8500
+export CONSUL_RPC_ADDR=$IP_ADDRESS:8400
 set +e
 OUTPUT=$(consul acl bootstrap 2>&1)
 sudo touch /ops/config/consul-token.txt
@@ -62,7 +67,7 @@ nomad acl policy apply -token=$NOMAD_BOOTSTRAP_TOKEN -description "Policy to all
 nomad acl token create -token=$NOMAD_BOOTSTRAP_TOKEN -name "read-token" -policy node-read-job-submit | grep -i secret | awk -F "=" '{print $2}' | xargs > $NOMAD_USER_TOKEN
 
 # Write user token to kv
-consul kv put -token=$CONSUL_BOOTSTRAP_TOKEN nomad_user_token $(cat $NOMAD_USER_TOKEN)
+consul kv put -token=$CONSUL_BOOTSTRAP_TOKEN "nomad_user_token_${INSTANCE_NUMBER}" $(cat $NOMAD_USER_TOKEN)
 # Write service account to kv, used for the csi driver plugin
 #DECODED_KEY=$(echo $SERVICE_ACCOUNT | base64 --decode)
 #consul kv put -token=$CONSUL_BOOTSTRAP_TOKEN service_account $DECODED_KEY

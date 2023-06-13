@@ -60,7 +60,7 @@ func getAccessToken(url string, token string) string {
 
 	// Retry till Consul is ready
 	for i := 0; i < 10; i++ {
-		req, err := http.NewRequest("GET", url+"nomad_user_token", nil)
+		req, err := http.NewRequest("GET", url+"nomad_user_token_0", nil)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -264,6 +264,7 @@ func main() {
 
 		var server []*compute.Instance
 		for i := 0; i < instanceCount; i++ {
+			serverStartupScript = injectToken(strconv.Itoa(i), "INSTANCE_NUMBER_PLACEHOLDER", serverStartupScript, 1)
 			__res, err := compute.NewInstance(ctx, fmt.Sprintf("server-%v", i), &compute.InstanceArgs{
 				MachineType:           pulumi.String("e2-micro"),
 				Zone:                  pulumi.String("europe-central2-b"),
@@ -300,11 +301,12 @@ func main() {
 		}
 
 		clientStartupScript := readFileOrPanic("config/client.sh", ctx)
-		clientStartupScript = injectToken(nomad_consul_token_secret, "nomad_consul_token_secret", clientStartupScript, 1)
+		clientStartupScript = injectToken(nomad_consul_token_secret, "nomad_consul_token_secret", clientStartupScript, 2)
 		// Create a new GCP compute instance to run the Nomad cleints on.
 
 		var client []*compute.Instance
 		for i := 0; i < instanceCount; i++ {
+			clientStartupScript = injectToken(strconv.Itoa(i), "INSTANCE_NUMBER_PLACEHOLDER", clientStartupScript, 1)
 			__res, err := compute.NewInstance(ctx, fmt.Sprintf("client-%v", i), &compute.InstanceArgs{
 				MachineType:            pulumi.String("e2-micro"),
 				Zone:                   pulumi.String("europe-central2-b"),
@@ -331,7 +333,7 @@ func main() {
 				},
 			}, pulumi.DependsOn([]pulumi.Resource{firewall, internalFirewall}))
 			if err != nil {
-				// handle error
+				return err
 			}
 			client = append(client, __res)
 
