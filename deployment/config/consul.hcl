@@ -3,7 +3,7 @@ bind_addr = "0.0.0.0"
 client_addr = "0.0.0.0"
 advertise_addr = "IP_ADDRESS"
 
-bootstrap_expect = 1
+bootstrap_expect = 3
 
 acl {
     enabled = true

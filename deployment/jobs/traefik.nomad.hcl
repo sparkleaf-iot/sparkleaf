@@ -61,6 +61,7 @@ job "traefik" {
 
     [providers.consulCatalog.endpoint]
       address = "127.0.0.1:8500"
+      token = ""
       scheme  = "http"
 EOF
 

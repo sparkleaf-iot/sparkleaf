@@ -44,7 +44,7 @@ func waitForLeaderElection(url string, token string) bool {
 		req.Header.Set("Authorization", "Bearer "+token)
 		resp, err := client.Do(req)
 		if err != nil || resp.StatusCode != 200 {
-			time.Sleep(time.Second * 15)
+			time.Sleep(time.Second * 30)
 			log.Println("Waiting for leader election...")
 		} else {
 			defer resp.Body.Close()
@@ -370,8 +370,12 @@ func main() {
 		if err != nil {
 			return err
 		}
-		_ = url.ApplyT(func(url string) (interface{}, error) {
-			return waitForLeaderElection(url, nomad_consul_token_secret), nil
+		url.ApplyT(func(url string) error {
+
+			if !waitForLeaderElection(url, nomad_consul_token_secret) {
+				return fmt.Errorf("leader election did not complete")
+			}
+			return nil
 		})
 
 		traefikJobSpec := readFileOrPanic("jobs/traefik.nomad.hcl", ctx)
