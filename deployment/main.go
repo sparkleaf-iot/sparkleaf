@@ -17,6 +17,7 @@ import (
 	"github.com/pulumi/pulumi-gcp/sdk/v6/go/gcp/compute"
 	"github.com/pulumi/pulumi-gcp/sdk/v6/go/gcp/projects"
 	"github.com/pulumi/pulumi-gcp/sdk/v6/go/gcp/serviceaccount"
+	"github.com/pulumi/pulumi-nomad/sdk/go/nomad"
 
 	//"github.com/pulumi/pulumi-nomad/sdk/go/nomad"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
@@ -31,28 +32,6 @@ func readFileOrPanic(path string, ctx *pulumi.Context) string {
 	return string(data)
 }
 
-func waitForLeaderElection(url string, token string) bool {
-	client := &http.Client{}
-
-	// Retry till leader is ready
-	for i := 0; i < 10; i++ {
-		req, err := http.NewRequest("GET", url+"/v1/status/leader", nil)
-		if err != nil {
-			log.Fatal(err)
-		}
-		req.Header.Set("Authorization", "Bearer "+token)
-		resp, err := client.Do(req)
-		if err != nil || resp.StatusCode != 200 {
-			time.Sleep(time.Second * 30)
-			log.Println("Waiting for leader election...")
-		} else {
-			defer resp.Body.Close()
-			return true
-		}
-	}
-	return false
-
-}
 func getAccessToken(url string, token string) string {
 	// Querying the Consul KV store to fetch the access token
 	client := &http.Client{}
@@ -66,7 +45,7 @@ func getAccessToken(url string, token string) string {
 		req.Header.Set("Authorization", "Bearer "+token)
 		resp, err := client.Do(req)
 		if err != nil || resp.StatusCode != 200 {
-			time.Sleep(time.Second * 20)
+			time.Sleep(time.Second * 30)
 			log.Println("Retrying...")
 		} else {
 			defer resp.Body.Close()
@@ -263,11 +242,13 @@ func main() {
 
 		var server []*compute.Instance
 		for i := 0; i < instanceCount; i++ {
-			serverStartupScript = injectToken(strconv.Itoa(i), "INSTANCE_NUMBER_PLACEHOLDER", serverStartupScript, 1)
+			time.Sleep(time.Second * 2)
+			serverScript := injectToken(strconv.Itoa(i), "INSTANCE_NUMBER_PLACEHOLDER", serverStartupScript, 1)
+			log.Println(serverScript)
 			__res, err := compute.NewInstance(ctx, fmt.Sprintf("server-%v", i), &compute.InstanceArgs{
 				MachineType:           pulumi.String("e2-micro"),
 				Zone:                  pulumi.String("europe-central2-b"),
-				MetadataStartupScript: pulumi.String(serverStartupScript),
+				MetadataStartupScript: pulumi.String(serverScript),
 				Metadata: pulumi.StringMap{
 					"access_token": pulumi.String("nil"),
 				},
@@ -305,7 +286,6 @@ func main() {
 
 		var client []*compute.Instance
 		for i := 0; i < instanceCount; i++ {
-			clientStartupScript = injectToken(strconv.Itoa(i), "INSTANCE_NUMBER_PLACEHOLDER", clientStartupScript, 1)
 			__res, err := compute.NewInstance(ctx, fmt.Sprintf("client-%v", i), &compute.InstanceArgs{
 				MachineType:            pulumi.String("e2-micro"),
 				Zone:                   pulumi.String("europe-central2-b"),
@@ -343,9 +323,9 @@ func main() {
 		}
 		natIp := server[0].NetworkInterfaces.Index(pulumi.Int(0)).AccessConfigs().Index(pulumi.Int(0)).NatIp()
 
-		// url := natIp.ApplyT(func(ip *string) string {
-		// 	return "http://" + *ip + ":4646"
-		// }).(pulumi.StringOutput)
+		url := natIp.ApplyT(func(ip *string) string {
+			return "http://" + *ip + ":4646"
+		}).(pulumi.StringOutput)
 
 		consulKvUrl := natIp.ApplyT(func(ip *string) string {
 			return "http://" + *ip + ":8500/v1/kv/"
@@ -360,16 +340,15 @@ func main() {
 				return getAccessToken(url, nomad_consul_token_secret)
 			}).(pulumi.StringOutput)
 
-		// provider, err := nomad.NewProvider(ctx, "nomad", &nomad.ProviderArgs{
-		// 	Address:     url,
-		// 	SecretId:    accessToken,
-		// 	ConsulToken: pulumi.String(nomad_consul_token_secret),
-		// }, pulumi.DependsOn([]pulumi.Resource{server[0]}))
+		_, err = nomad.NewProvider(ctx, "nomad", &nomad.ProviderArgs{
+			Address:     url,
+			SecretId:    accessToken,
+			ConsulToken: pulumi.String(nomad_consul_token_secret),
+		}, pulumi.DependsOn([]pulumi.Resource{server[0]}))
 
-		// if err != nil {
-		// 	return err
-		// }
-		
+		if err != nil {
+			return err
+		}
 
 		// traefikJobSpec := readFileOrPanic("jobs/traefik.nomad.hcl", ctx)
 		// traefikJobSpec = injectToken(nomad_consul_token_secret, "nomad_consul_token_secret", traefikJobSpec, 1)
@@ -436,7 +415,7 @@ func main() {
 		// ctx.Export("influxJob", influxJob.ID())
 		// ctx.Export("traefikJob", traefikJob.ID())
 		// ctx.Export("csiControllerJob", csiControllerJob.ID())
-		for key, _ := range server {
+		for key := range server {
 			ctx.Export("server"+strconv.Itoa(key), server[key].Name)
 			ctx.Export("serverIP"+strconv.Itoa(key), server[key].NetworkInterfaces.Index(pulumi.Int(0)).AccessConfigs().Index(pulumi.Int(0)).NatIp())
 			ctx.Export("client"+strconv.Itoa(key), client[key].Name)

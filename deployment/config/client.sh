@@ -12,7 +12,6 @@ CLOUD_ENV=gce
 
 # Wait for network
 sleep 15
-# Replace token in nomad client config
 
 
 # Add hostname to /etc/hosts
@@ -27,7 +26,7 @@ export CONSUL_HTTP_ADDR=$IP_ADDRESS:8500
 export CONSUL_RPC_ADDR=$IP_ADDRESS:8400
 sudo systemctl enable consul.service
 sudo systemctl start consul.service
-sleep 10
+sleep 65
 set +e
 OUTPUT=$(consul acl bootstrap 2>&1)
 sudo touch /ops/config/consul-token.txt
