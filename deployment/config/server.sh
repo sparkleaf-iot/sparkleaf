@@ -16,7 +16,6 @@ NOMAD_USER_TOKEN="/tmp/nomad_user_token"
 INSTANCE_NUMBER=INSTANCE_NUMBER_PLACEHOLDER
 # Consul
 sed -i "s/IP_ADDRESS/$IP_ADDRESS/g" $CONFIGDIR/consul.hcl
-sed -i "s/BOOTSTRAP_TOKEN/$CONSUL_BOOTSTRAP_TOKEN/g" $CONFIGDIR/consul.hcl
 
 #sed -i "s/SERVER_COUNT/$SERVER_COUNT/g" $CONFIGDIR/consul.hcl
 #sed -i "s/RETRY_JOIN/$RETRY_JOIN/g" $CONFIGDIR/consul.hcl
@@ -36,6 +35,8 @@ OUTPUT=$(consul acl bootstrap 2>&1)
 sudo touch /ops/config/consul-token.txt
 CONSUL_BOOTSTRAP_TOKEN=$(echo $OUTPUT | grep -i secretid | awk '{print $4}')
 sudo echo $CONSUL_BOOTSTRAP_TOKEN > /ops/config/consul-token.txt
+#sed -i "s/BOOTSTRAP_TOKEN/$CONSUL_BOOTSTRAP_TOKEN/g" $CONSULCONFIGDIR/consul.hcl
+
 
 consul acl policy create -name 'nomad-auto-join' -rules="@$CONFIGDIR/consul-acl-nomad-auto-join.hcl" -token=$CONSUL_BOOTSTRAP_TOKEN
 
