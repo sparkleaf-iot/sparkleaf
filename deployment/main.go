@@ -38,14 +38,14 @@ func getAccessToken(url string, token string) string {
 
 	// Retry till Consul is ready
 	for i := 0; i < 10; i++ {
-		req, err := http.NewRequest("GET", url+"nomad_user_token_0", nil)
+		req, err := http.NewRequest("GET", url+"nomad_user_token", nil)
 		if err != nil {
 			log.Fatal(err)
 		}
 		req.Header.Set("Authorization", "Bearer "+token)
 		resp, err := client.Do(req)
 		if err != nil || resp.StatusCode != 200 {
-			time.Sleep(time.Second * 30)
+			time.Sleep(time.Second * 20)
 			log.Println("Retrying...")
 		} else {
 			defer resp.Body.Close()
@@ -244,7 +244,6 @@ func main() {
 		for i := 0; i < instanceCount; i++ {
 			time.Sleep(time.Second * 2)
 			serverScript := injectToken(strconv.Itoa(i), "INSTANCE_NUMBER_PLACEHOLDER", serverStartupScript, 1)
-			log.Println(serverScript)
 			__res, err := compute.NewInstance(ctx, fmt.Sprintf("server-%v", i), &compute.InstanceArgs{
 				MachineType:           pulumi.String("e2-micro"),
 				Zone:                  pulumi.String("europe-central2-b"),
