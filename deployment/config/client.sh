@@ -1,4 +1,5 @@
 #!/bin/bash
+exec > /ops/config/output.txt 2>&1
 
 set -e
 
@@ -26,7 +27,7 @@ export CONSUL_HTTP_ADDR=$IP_ADDRESS:8500
 export CONSUL_RPC_ADDR=$IP_ADDRESS:8400
 sudo systemctl enable consul.service
 sudo systemctl start consul.service
-sleep 65
+sleep 30
 set +e
 OUTPUT=$(consul acl bootstrap 2>&1)
 sudo touch /ops/config/consul-token.txt

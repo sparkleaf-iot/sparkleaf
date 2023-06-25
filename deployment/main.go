@@ -227,14 +227,14 @@ func main() {
 			return err
 		}
 
-		// influxDisk, err := compute.NewDisk(ctx, "influxdisk", &compute.DiskArgs{
-		// 	Size: pulumi.Int(10),
-		// 	Type: pulumi.String("pd-standard"),
-		// 	Zone: pulumi.String("europe-central2-b"),
-		// })
-		// if err != nil {
-		// 	return err
-		// }
+		influxDisk, err := compute.NewDisk(ctx, "influxdisk", &compute.DiskArgs{
+			Size: pulumi.Int(10),
+			Type: pulumi.String("pd-standard"),
+			Zone: pulumi.String("europe-central2-b"),
+		})
+		if err != nil {
+			return err
+		}
 
 		serverStartupScript := readFileOrPanic("config/server.sh", ctx)
 		serverStartupScript = injectToken(nomad_consul_token_id, "nomad_consul_token_id", serverStartupScript, 1)
@@ -339,7 +339,7 @@ func main() {
 				return getAccessToken(url, nomad_consul_token_secret)
 			}).(pulumi.StringOutput)
 
-		_, err = nomad.NewProvider(ctx, "nomad", &nomad.ProviderArgs{
+		provider, err := nomad.NewProvider(ctx, "nomad", &nomad.ProviderArgs{
 			Address:     url,
 			SecretId:    accessToken,
 			ConsulToken: pulumi.String(nomad_consul_token_secret),
@@ -349,71 +349,71 @@ func main() {
 			return err
 		}
 
-		// traefikJobSpec := readFileOrPanic("jobs/traefik.nomad.hcl", ctx)
-		// traefikJobSpec = injectToken(nomad_consul_token_secret, "nomad_consul_token_secret", traefikJobSpec, 1)
-		// traefikJob, err := nomad.NewJob(ctx, "traefik", &nomad.JobArgs{
-		// 	Jobspec: pulumi.String(traefikJobSpec),
-		// }, pulumi.Provider(provider), pulumi.ReplaceOnChanges([]string{"jobspec"}), pulumi.DeleteBeforeReplace(true), pulumi.DependsOn([]pulumi.Resource{provider}))
+		traefikJobSpec := readFileOrPanic("jobs/traefik.nomad.hcl", ctx)
+		traefikJobSpec = injectToken(nomad_consul_token_secret, "nomad_consul_token_secret", traefikJobSpec, 1)
+		traefikJob, err := nomad.NewJob(ctx, "traefik", &nomad.JobArgs{
+			Jobspec: pulumi.String(traefikJobSpec),
+		}, pulumi.Provider(provider), pulumi.ReplaceOnChanges([]string{"jobspec"}), pulumi.DeleteBeforeReplace(true), pulumi.DependsOn([]pulumi.Resource{provider}))
 
-		// if err != nil {
-		// 	return err
-		// }
+		if err != nil {
+			return err
+		}
 
-		// csiControllerJob, err := nomad.NewJob(ctx, "csi-controller", &nomad.JobArgs{
-		// 	Jobspec: pulumi.String(readFileOrPanic("jobs/csi-controller.nomad.hcl", ctx)),
-		// }, pulumi.Provider(provider), pulumi.ReplaceOnChanges([]string{"jobspec"}), pulumi.DeleteBeforeReplace(true), pulumi.DependsOn([]pulumi.Resource{provider}))
+		csiControllerJob, err := nomad.NewJob(ctx, "csi-controller", &nomad.JobArgs{
+			Jobspec: pulumi.String(readFileOrPanic("jobs/csi-controller.nomad.hcl", ctx)),
+		}, pulumi.Provider(provider), pulumi.ReplaceOnChanges([]string{"jobspec"}), pulumi.DeleteBeforeReplace(true), pulumi.DependsOn([]pulumi.Resource{provider}))
 
-		// if err != nil {
-		// 	return err
-		// }
+		if err != nil {
+			return err
+		}
 
-		// csiNodeJob, err := nomad.NewJob(ctx, "csi-node", &nomad.JobArgs{
-		// 	Jobspec: pulumi.String(readFileOrPanic("jobs/csi-node.nomad.hcl", ctx)),
-		// }, pulumi.Provider(provider), pulumi.ReplaceOnChanges([]string{"jobspec"}), pulumi.DeleteBeforeReplace(true), pulumi.DependsOn([]pulumi.Resource{provider}))
+		csiNodeJob, err := nomad.NewJob(ctx, "csi-node", &nomad.JobArgs{
+			Jobspec: pulumi.String(readFileOrPanic("jobs/csi-node.nomad.hcl", ctx)),
+		}, pulumi.Provider(provider), pulumi.ReplaceOnChanges([]string{"jobspec"}), pulumi.DeleteBeforeReplace(true), pulumi.DependsOn([]pulumi.Resource{provider}))
 
-		// if err != nil {
-		// 	return err
-		// }
-		// csiPlugin := nomad.GetPluginOutput(ctx, nomad.GetPluginOutputArgs{
-		// 	PluginId:       pulumi.String("gcepd"),
-		// 	WaitForHealthy: pulumi.Bool(true),
-		// }, nil)
+		if err != nil {
+			return err
+		}
+		csiPlugin := nomad.GetPluginOutput(ctx, nomad.GetPluginOutputArgs{
+			PluginId:       pulumi.String("gcepd"),
+			WaitForHealthy: pulumi.Bool(true),
+		}, nil)
 
-		// _ = csiPlugin.Id().ApplyT(func(id string) (interface{}, error) {
+		_ = csiPlugin.Id().ApplyT(func(id string) (interface{}, error) {
 
-		// 	volume, err := nomad.NewVolume(ctx, "influxVolume", &nomad.VolumeArgs{
-		// 		Type:       pulumi.String("csi"),
-		// 		PluginId:   pulumi.String("gcepd"),
-		// 		VolumeId:   pulumi.String("influx_volume"),
-		// 		ExternalId: influxDisk.ID(),
-		// 		Capabilities: nomad.VolumeCapabilityArray{
-		// 			&nomad.VolumeCapabilityArgs{
-		// 				AccessMode:     pulumi.String("single-node-writer"),
-		// 				AttachmentMode: pulumi.String("file-system"),
-		// 			},
-		// 		},
-		// 		MountOptions: &nomad.VolumeMountOptionsArgs{
-		// 			FsType: pulumi.String("ext4"),
-		// 		},
-		// 	}, pulumi.Provider(provider), pulumi.DependsOn([]pulumi.Resource{provider, csiControllerJob, csiNodeJob}))
-		// 	if err != nil {
-		// 		return nil, err
-		// 	}
-		// 	return volume, err
-		// })
+			volume, err := nomad.NewVolume(ctx, "influxVolume", &nomad.VolumeArgs{
+				Type:       pulumi.String("csi"),
+				PluginId:   pulumi.String("gcepd"),
+				VolumeId:   pulumi.String("influx_volume"),
+				ExternalId: influxDisk.ID(),
+				Capabilities: nomad.VolumeCapabilityArray{
+					&nomad.VolumeCapabilityArgs{
+						AccessMode:     pulumi.String("single-node-writer"),
+						AttachmentMode: pulumi.String("file-system"),
+					},
+				},
+				MountOptions: &nomad.VolumeMountOptionsArgs{
+					FsType: pulumi.String("ext4"),
+				},
+			}, pulumi.Provider(provider), pulumi.DependsOn([]pulumi.Resource{provider, csiControllerJob, csiNodeJob}))
+			if err != nil {
+				return nil, err
+			}
+			return volume, err
+		})
 
-		// influxJob, err := nomad.NewJob(ctx, "influx-cluster", &nomad.JobArgs{
-		// 	Jobspec: pulumi.String(readFileOrPanic("jobs/influx.nomad.hcl", ctx)),
-		// }, pulumi.Provider(provider), pulumi.DependsOn([]pulumi.Resource{csiControllerJob, csiNodeJob}))
+		influxJob, err := nomad.NewJob(ctx, "influx-cluster", &nomad.JobArgs{
+			Jobspec: pulumi.String(readFileOrPanic("jobs/influx.nomad.hcl", ctx)),
+		}, pulumi.Provider(provider), pulumi.DependsOn([]pulumi.Resource{csiControllerJob, csiNodeJob}))
 
-		// if err != nil {
-		// 	return err
-		// }
+		if err != nil {
+			return err
+		}
 
 		ctx.Export("nomad_job_token", accessToken)
-		// ctx.Export("influxJob", influxJob.ID())
-		// ctx.Export("traefikJob", traefikJob.ID())
-		// ctx.Export("csiControllerJob", csiControllerJob.ID())
+		ctx.Export("influxJob", influxJob.ID())
+		ctx.Export("traefikJob", traefikJob.ID())
+		ctx.Export("csiControllerJob", csiControllerJob.ID())
 		for key := range server {
 			ctx.Export("server"+strconv.Itoa(key), server[key].Name)
 			ctx.Export("serverIP"+strconv.Itoa(key), server[key].NetworkInterfaces.Index(pulumi.Int(0)).AccessConfigs().Index(pulumi.Int(0)).NatIp())
