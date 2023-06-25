@@ -16,6 +16,23 @@ job "influxdb" {
          static = 8086
       }
     }
+    service {
+      name = "influxdb"
+      port = "http"
+      
+      tags = [
+        "traefik.enable=true",
+        "traefik.http.routers.influxdb.rule=Host(`your-domain.com`)",
+        "traefik.http.routers.influxdb.entrypoints=web",
+      ]
+
+      check {
+        type     = "http"
+        path     = "/"
+        interval = "10s"
+        timeout  = "2s"
+      }
+    }
     task "influxdb" {
       driver = "docker"
       volume_mount {

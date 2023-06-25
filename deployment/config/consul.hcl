@@ -3,15 +3,13 @@ bind_addr = "0.0.0.0"
 client_addr = "0.0.0.0"
 advertise_addr = "IP_ADDRESS"
 
-bootstrap_expect = 1
+bootstrap_expect = 3
 
 acl {
     enabled = true
     default_policy = "deny"
     down_policy = "extend-cache"
-    tokens {
-      agent = "BOOTSTRAP_TOKEN"
-  }
+    
 }
 
 log_level = "INFO"

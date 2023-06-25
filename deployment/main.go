@@ -32,28 +32,6 @@ func readFileOrPanic(path string, ctx *pulumi.Context) string {
 	return string(data)
 }
 
-func waitForLeaderElection(url string, token string) bool {
-	client := &http.Client{}
-
-	// Retry till leader is ready
-	for i := 0; i < 10; i++ {
-		req, err := http.NewRequest("GET", url+"/v1/status/leader", nil)
-		if err != nil {
-			log.Fatal(err)
-		}
-		req.Header.Set("Authorization", "Bearer "+token)
-		resp, err := client.Do(req)
-		if err != nil || resp.StatusCode != 200 {
-			time.Sleep(time.Second * 15)
-			log.Println("Waiting for leader election...")
-		} else {
-			defer resp.Body.Close()
-			return true
-		}
-	}
-	return false
-
-}
 func getAccessToken(url string, token string) string {
 	// Querying the Consul KV store to fetch the access token
 	client := &http.Client{}
@@ -67,7 +45,7 @@ func getAccessToken(url string, token string) string {
 		req.Header.Set("Authorization", "Bearer "+token)
 		resp, err := client.Do(req)
 		if err != nil || resp.StatusCode != 200 {
-			time.Sleep(time.Second * 15)
+			time.Sleep(time.Second * 20)
 			log.Println("Retrying...")
 		} else {
 			defer resp.Body.Close()
@@ -264,10 +242,12 @@ func main() {
 
 		var server []*compute.Instance
 		for i := 0; i < instanceCount; i++ {
+			time.Sleep(time.Second * 2)
+			serverScript := injectToken(strconv.Itoa(i), "INSTANCE_NUMBER_PLACEHOLDER", serverStartupScript, 1)
 			__res, err := compute.NewInstance(ctx, fmt.Sprintf("server-%v", i), &compute.InstanceArgs{
 				MachineType:           pulumi.String("e2-micro"),
 				Zone:                  pulumi.String("europe-central2-b"),
-				MetadataStartupScript: pulumi.String(serverStartupScript),
+				MetadataStartupScript: pulumi.String(serverScript),
 				Metadata: pulumi.StringMap{
 					"access_token": pulumi.String("nil"),
 				},
@@ -300,7 +280,7 @@ func main() {
 		}
 
 		clientStartupScript := readFileOrPanic("config/client.sh", ctx)
-		clientStartupScript = injectToken(nomad_consul_token_secret, "nomad_consul_token_secret", clientStartupScript, 1)
+		clientStartupScript = injectToken(nomad_consul_token_secret, "nomad_consul_token_secret", clientStartupScript, 2)
 		// Create a new GCP compute instance to run the Nomad cleints on.
 
 		var client []*compute.Instance
@@ -331,7 +311,7 @@ func main() {
 				},
 			}, pulumi.DependsOn([]pulumi.Resource{firewall, internalFirewall}))
 			if err != nil {
-				// handle error
+				return err
 			}
 			client = append(client, __res)
 
@@ -368,9 +348,6 @@ func main() {
 		if err != nil {
 			return err
 		}
-		_ = url.ApplyT(func(url string) (interface{}, error) {
-			return waitForLeaderElection(url, nomad_consul_token_secret), nil
-		})
 
 		traefikJobSpec := readFileOrPanic("jobs/traefik.nomad.hcl", ctx)
 		traefikJobSpec = injectToken(nomad_consul_token_secret, "nomad_consul_token_secret", traefikJobSpec, 1)
@@ -437,7 +414,7 @@ func main() {
 		ctx.Export("influxJob", influxJob.ID())
 		ctx.Export("traefikJob", traefikJob.ID())
 		ctx.Export("csiControllerJob", csiControllerJob.ID())
-		for key, _ := range server {
+		for key := range server {
 			ctx.Export("server"+strconv.Itoa(key), server[key].Name)
 			ctx.Export("serverIP"+strconv.Itoa(key), server[key].NetworkInterfaces.Index(pulumi.Int(0)).AccessConfigs().Index(pulumi.Int(0)).NatIp())
 			ctx.Export("client"+strconv.Itoa(key), client[key].Name)

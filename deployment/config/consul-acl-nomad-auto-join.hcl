@@ -3,7 +3,7 @@ acl = "write"
 key_prefix "traefik" {
       policy = "write"
     }
-    service "traefik" {
+service "traefik" {
       policy = "write"
     }
 agent_prefix "" {
