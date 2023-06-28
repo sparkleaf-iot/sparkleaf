@@ -123,7 +123,9 @@ func injectToken(token string, toBeReplaced string, script string, amount int) s
 
 	return strings.Replace(script, toBeReplaced, token, amount)
 }
-
+func createToken() string {
+	return uuid.NewString()
+}
 func main() {
 	pulumi.Run(func(ctx *pulumi.Context) error {
 		// Get the configuration values from the appropriate yaml.
@@ -203,6 +205,16 @@ func main() {
 		if err != nil {
 			return err
 		}
+
+		// externalIp, err := compute.NewAddress(ctx, "external-ip", &compute.AddressArgs{
+		// 	Region: pulumi.String("europe-central2"),
+		// 	Network: network.SelfLink,
+			
+		// })
+		// if err != nil {
+		// 	return err
+		// }
+
 		serviceAccount, err := serviceaccount.NewAccount(ctx, "serviceAccount", &serviceaccount.AccountArgs{
 			AccountId:   pulumi.String("server-account"),
 			DisplayName: pulumi.String("Vm server service account"),
@@ -231,7 +243,7 @@ func main() {
 			Size: pulumi.Int(10),
 			Type: pulumi.String("pd-standard"),
 			Zone: pulumi.String("europe-central2-b"),
-		})
+		}, pulumi.Protect(false))
 		if err != nil {
 			return err
 		}
@@ -271,7 +283,7 @@ func main() {
 						pulumi.String("https://www.googleapis.com/auth/cloud-platform"),
 					},
 				},
-			}, pulumi.DependsOn([]pulumi.Resource{firewall, internalFirewall, serviceAccountKey}))
+			}, pulumi.DependsOn([]pulumi.Resource{firewall, internalFirewall, serviceAccountKey}),pulumi.IgnoreChanges([]string{"metadataStartupScript"}))
 			if err != nil {
 				return err
 			}
@@ -309,7 +321,7 @@ func main() {
 						pulumi.String("https://www.googleapis.com/auth/cloud-platform"),
 					},
 				},
-			}, pulumi.DependsOn([]pulumi.Resource{firewall, internalFirewall}))
+			}, pulumi.DependsOn([]pulumi.Resource{firewall, internalFirewall}), pulumi.IgnoreChanges([]string{"metadataStartupScript"}))
 			if err != nil {
 				return err
 			}
@@ -343,7 +355,7 @@ func main() {
 			Address:     url,
 			SecretId:    accessToken,
 			ConsulToken: pulumi.String(nomad_consul_token_secret),
-		}, pulumi.DependsOn([]pulumi.Resource{server[0]}))
+		}, pulumi.DependsOn([]pulumi.Resource{server[0]}), pulumi.IgnoreChanges([]string{"secretId"}))
 
 		if err != nil {
 			return err
