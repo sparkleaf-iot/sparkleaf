@@ -15,11 +15,11 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/pulumi/pulumi-gcp/sdk/v6/go/gcp/compute"
+	"github.com/pulumi/pulumi-gcp/sdk/v6/go/gcp/dns"
 	"github.com/pulumi/pulumi-gcp/sdk/v6/go/gcp/projects"
 	"github.com/pulumi/pulumi-gcp/sdk/v6/go/gcp/serviceaccount"
 	"github.com/pulumi/pulumi-nomad/sdk/go/nomad"
 
-	//"github.com/pulumi/pulumi-nomad/sdk/go/nomad"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi/config"
 )
@@ -137,8 +137,8 @@ func main() {
 		}
 		machineImage := gcpConf.Require("machine_image")
 		// Create a bootstrap token for Consul and Nomad
-		nomad_consul_token_id := uuid.NewString()
-		nomad_consul_token_secret := uuid.NewString()
+		nomad_consul_token_id := pulumi.ToSecret(createToken())
+		nomad_consul_token_secret := pulumi.ToSecret(createToken())
 
 		// Create a new VPC network for the Nomad server.
 		network, err := compute.NewNetwork(ctx, "nomad-network", &compute.NetworkArgs{
@@ -206,15 +206,6 @@ func main() {
 			return err
 		}
 
-		// externalIp, err := compute.NewAddress(ctx, "external-ip", &compute.AddressArgs{
-		// 	Region: pulumi.String("europe-central2"),
-		// 	Network: network.SelfLink,
-			
-		// })
-		// if err != nil {
-		// 	return err
-		// }
-
 		serviceAccount, err := serviceaccount.NewAccount(ctx, "serviceAccount", &serviceaccount.AccountArgs{
 			AccountId:   pulumi.String("server-account"),
 			DisplayName: pulumi.String("Vm server service account"),
@@ -238,6 +229,12 @@ func main() {
 		if err != nil {
 			return err
 		}
+		dnsZone := dns.LookupManagedZoneOutput(ctx, dns.LookupManagedZoneOutputArgs{
+			Name: pulumi.String("sparkleaf-main"),
+		}, nil)
+		if err != nil {
+			return err
+		}
 
 		influxDisk, err := compute.NewDisk(ctx, "influxdisk", &compute.DiskArgs{
 			Size: pulumi.Int(10),
@@ -247,19 +244,25 @@ func main() {
 		if err != nil {
 			return err
 		}
+		serverScriptFile := readFileOrPanic("config/server.sh", ctx)
+		serverStartupScript := pulumi.All(nomad_consul_token_id, nomad_consul_token_secret).ApplyT(
+			func(args []interface{}) string {
 
-		serverStartupScript := readFileOrPanic("config/server.sh", ctx)
-		serverStartupScript = injectToken(nomad_consul_token_id, "nomad_consul_token_id", serverStartupScript, 1)
-		serverStartupScript = injectToken(nomad_consul_token_secret, "nomad_consul_token_secret", serverStartupScript, 2)
+				script := injectToken(args[0].(string), "nomad_consul_token_id", serverScriptFile, 1)
+				script = injectToken(args[1].(string), "nomad_consul_token_secret", script, 2)
+				return script
+			})
 
 		var server []*compute.Instance
 		for i := 0; i < instanceCount; i++ {
 			time.Sleep(time.Second * 2)
-			serverScript := injectToken(strconv.Itoa(i), "INSTANCE_NUMBER_PLACEHOLDER", serverStartupScript, 1)
-			__res, err := compute.NewInstance(ctx, fmt.Sprintf("server-%v", i), &compute.InstanceArgs{
+			serverScript := serverStartupScript.ApplyT(func(script string) string {
+				return injectToken(strconv.Itoa(i), "INSTANCE_NUMBER_PLACEHOLDER", script, 1)
+			})
+			__res, err := compute.NewInstance(ctx, fmt.Sprintf("server-%d", i), &compute.InstanceArgs{
 				MachineType:           pulumi.String("e2-micro"),
 				Zone:                  pulumi.String("europe-central2-b"),
-				MetadataStartupScript: pulumi.String(serverScript),
+				MetadataStartupScript: pulumi.Sprintf("%s", serverScript),
 				Metadata: pulumi.StringMap{
 					"access_token": pulumi.String("nil"),
 				},
@@ -283,7 +286,11 @@ func main() {
 						pulumi.String("https://www.googleapis.com/auth/cloud-platform"),
 					},
 				},
-			}, pulumi.DependsOn([]pulumi.Resource{firewall, internalFirewall, serviceAccountKey}),pulumi.IgnoreChanges([]string{"metadataStartupScript"}))
+			}, pulumi.DependsOn([]pulumi.Resource{
+				firewall,
+				internalFirewall,
+				serviceAccountKey,
+			}), pulumi.IgnoreChanges([]string{"metadataStartupScript"}))
 			if err != nil {
 				return err
 			}
@@ -291,16 +298,20 @@ func main() {
 
 		}
 
-		clientStartupScript := readFileOrPanic("config/client.sh", ctx)
-		clientStartupScript = injectToken(nomad_consul_token_secret, "nomad_consul_token_secret", clientStartupScript, 2)
 		// Create a new GCP compute instance to run the Nomad cleints on.
+		clientScriptFile := readFileOrPanic("config/client.sh", ctx)
+		clientStartupScript := pulumi.All(nomad_consul_token_secret).ApplyT(
+			func(args []interface{}) string {
+				script := injectToken(args[0].(string), "nomad_consul_token_secret", clientScriptFile, 2)
+				return script
+			})
 
 		var client []*compute.Instance
 		for i := 0; i < instanceCount; i++ {
-			__res, err := compute.NewInstance(ctx, fmt.Sprintf("client-%v", i), &compute.InstanceArgs{
+			__res, err := compute.NewInstance(ctx, fmt.Sprintf("client-%d", i), &compute.InstanceArgs{
 				MachineType:            pulumi.String("e2-micro"),
 				Zone:                   pulumi.String("europe-central2-b"),
-				MetadataStartupScript:  pulumi.String(clientStartupScript),
+				MetadataStartupScript:  pulumi.Sprintf("%s", clientStartupScript),
 				AllowStoppingForUpdate: pulumi.Bool(true),
 				Tags:                   pulumi.StringArray{pulumi.String("auto-join"), pulumi.String("nomad-clients")},
 				BootDisk: &compute.InstanceBootDiskArgs{
@@ -332,6 +343,26 @@ func main() {
 		if err != nil {
 			return err
 		}
+		for key := range client {
+
+			_, err = dns.NewRecordSet(ctx, fmt.Sprintf("clientRecordset-%d", key), &dns.RecordSetArgs{
+				Name:        pulumi.String(fmt.Sprintf("client-%d.emilsallem.com.", key)),
+				Type:        pulumi.String("A"),
+				Ttl:         pulumi.Int(300),
+				ManagedZone: dnsZone.Name().ApplyT(func(name string) string { return name }).(pulumi.StringOutput),
+				Rrdatas: pulumi.StringArray{
+					client[key].NetworkInterfaces.Index(pulumi.Int(0)).AccessConfigs().Index(pulumi.Int(0)).NatIp().ApplyT(func(ip *string) string {
+						return *ip
+					}).(pulumi.StringOutput),
+				},
+			})
+
+		}
+
+		if err != nil {
+			return err
+		}
+
 		natIp := server[0].NetworkInterfaces.Index(pulumi.Int(0)).AccessConfigs().Index(pulumi.Int(0)).NatIp()
 
 		url := natIp.ApplyT(func(ip *string) string {
@@ -342,30 +373,35 @@ func main() {
 			return "http://" + *ip + ":8500/v1/kv/"
 		}).(pulumi.StringOutput)
 
-		accountKey := pulumi.All(consulKvUrl, serviceAccountKey.PrivateKey).ApplyT(
+		accountKey := pulumi.All(consulKvUrl, serviceAccountKey.PrivateKey, nomad_consul_token_secret).ApplyT(
 			func(args []interface{}) []byte {
-				return setAccountKey(args[0].(string), args[1].(string), nomad_consul_token_secret)
+				return setAccountKey(args[0].(string), args[1].(string), args[2].(string))
 			})
-		accessToken := consulKvUrl.ApplyT(
-			func(url string) string {
-				return getAccessToken(url, nomad_consul_token_secret)
+
+		accessToken := pulumi.All(consulKvUrl, nomad_consul_token_secret).ApplyT(
+			func(args []interface{}) string {
+				return getAccessToken(args[0].(string), args[1].(string))
 			}).(pulumi.StringOutput)
 
 		provider, err := nomad.NewProvider(ctx, "nomad", &nomad.ProviderArgs{
 			Address:     url,
 			SecretId:    accessToken,
-			ConsulToken: pulumi.String(nomad_consul_token_secret),
+			ConsulToken: pulumi.Sprintf("%s", nomad_consul_token_secret),
 		}, pulumi.DependsOn([]pulumi.Resource{server[0]}), pulumi.IgnoreChanges([]string{"secretId"}))
 
 		if err != nil {
 			return err
 		}
 
-		traefikJobSpec := readFileOrPanic("jobs/traefik.nomad.hcl", ctx)
-		traefikJobSpec = injectToken(nomad_consul_token_secret, "nomad_consul_token_secret", traefikJobSpec, 1)
+		// traefikJobSpec := readFileOrPanic("jobs/traefik.nomad.hcl", ctx)
+		// traefikJobSpec = injectToken(pulumi.Sprintf("%s", nomad_consul_token_secret), "nomad_consul_token_secret", traefikJobSpec, 1)
+		traefikJobSpec := nomad_consul_token_secret.ApplyT(func(token string) string {
+			return injectToken(token, "nomad_consul_token_secret", readFileOrPanic("jobs/traefik.nomad.hcl", ctx), 1)
+		})
+
 		traefikJob, err := nomad.NewJob(ctx, "traefik", &nomad.JobArgs{
-			Jobspec: pulumi.String(traefikJobSpec),
-		}, pulumi.Provider(provider), pulumi.ReplaceOnChanges([]string{"jobspec"}), pulumi.DeleteBeforeReplace(true), pulumi.DependsOn([]pulumi.Resource{provider}))
+			Jobspec: pulumi.Sprintf("%s", traefikJobSpec),
+		}, pulumi.Provider(provider), pulumi.ReplaceOnChanges([]string{"jobspec"}), pulumi.DependsOn([]pulumi.Resource{provider}))
 
 		if err != nil {
 			return err
@@ -373,7 +409,7 @@ func main() {
 
 		csiControllerJob, err := nomad.NewJob(ctx, "csi-controller", &nomad.JobArgs{
 			Jobspec: pulumi.String(readFileOrPanic("jobs/csi-controller.nomad.hcl", ctx)),
-		}, pulumi.Provider(provider), pulumi.ReplaceOnChanges([]string{"jobspec"}), pulumi.DeleteBeforeReplace(true), pulumi.DependsOn([]pulumi.Resource{provider}))
+		}, pulumi.Provider(provider), pulumi.ReplaceOnChanges([]string{"jobspec"}), pulumi.DependsOn([]pulumi.Resource{provider}))
 
 		if err != nil {
 			return err

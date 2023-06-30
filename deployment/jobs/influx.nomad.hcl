@@ -42,7 +42,7 @@ job "influxdb" {
         provider = "consul"
         tags = [
         "traefik.enable=true",
-        "traefik.http.routers.dashboard.service=api@internal",
+        "traefik.http.routers.influxdb.rule=Path(`/`)",
         "traefik.http.routers.influxdb.entrypoints=web",
       ]
         
