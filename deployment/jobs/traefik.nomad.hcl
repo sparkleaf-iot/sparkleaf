@@ -1,7 +1,7 @@
 job "traefik" {
   region      = "global"
   datacenters = ["dc1"]
-  type        = "service"
+  type        = "system"
 
   group "traefik" {
     count = 1
@@ -18,7 +18,11 @@ job "traefik" {
 
     service {
       name = "traefik"
-
+      tags = [
+       "traefik",
+       "traefik.enable=true",
+       "traefik.http.routers.traefik.entrypoints=web",
+      ]
       check {
         name     = "alive"
         type     = "tcp"
@@ -49,6 +53,8 @@ job "traefik" {
     address = ":8080"
     [entryPoints.traefik]
     address = ":8081"
+    [entryPoints.web]
+    address = ":80"
 
 [api]
     dashboard = true
@@ -61,7 +67,7 @@ job "traefik" {
 
     [providers.consulCatalog.endpoint]
       address = "127.0.0.1:8500"
-      token = ""
+      token = "nomad_consul_token_secret"
       scheme  = "http"
 EOF
 
