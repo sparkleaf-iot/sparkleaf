@@ -343,21 +343,31 @@ func main() {
 		if err != nil {
 			return err
 		}
+
+		clientIpArray := pulumi.StringArray{}
 		for key := range client {
+			ip := client[key].NetworkInterfaces.Index(pulumi.Int(0)).AccessConfigs().Index(pulumi.Int(0)).NatIp().ApplyT(func(ip *string) string {
+				return *ip
+			}).(pulumi.StringOutput)
 
-			_, err = dns.NewRecordSet(ctx, fmt.Sprintf("clientRecordset-%d", key), &dns.RecordSetArgs{
-				Name:        pulumi.String(fmt.Sprintf("client-%d.emilsallem.com.", key)),
-				Type:        pulumi.String("A"),
-				Ttl:         pulumi.Int(300),
-				ManagedZone: dnsZone.Name().ApplyT(func(name string) string { return name }).(pulumi.StringOutput),
-				Rrdatas: pulumi.StringArray{
-					client[key].NetworkInterfaces.Index(pulumi.Int(0)).AccessConfigs().Index(pulumi.Int(0)).NatIp().ApplyT(func(ip *string) string {
-						return *ip
-					}).(pulumi.StringOutput),
-				},
-			})
-
+			clientIpArray = append(clientIpArray, ip)
 		}
+
+		_, err = dns.NewRecordSet(ctx, "clientRecordset", &dns.RecordSetArgs{
+			Name:        pulumi.String("sparkleaf.emilsallem.com."),
+			Type:        pulumi.String("A"),
+			Ttl:         pulumi.Int(300),
+			ManagedZone: dnsZone.Name().ApplyT(func(name string) string { return name }).(pulumi.StringOutput),
+			Rrdatas: clientIpArray,
+		})
+		_, err = dns.NewRecordSet(ctx, "influxRecordSet", &dns.RecordSetArgs{
+			Name:        pulumi.String("influx.emilsallem.com."),
+			Type:        pulumi.String("A"),
+			Ttl:         pulumi.Int(300),
+			ManagedZone: dnsZone.Name().ApplyT(func(name string) string { return name }).(pulumi.StringOutput),
+			Rrdatas: clientIpArray,
+		})
+		
 
 		if err != nil {
 			return err

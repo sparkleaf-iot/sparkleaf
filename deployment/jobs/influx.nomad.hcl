@@ -26,7 +26,7 @@ job "influxdb" {
       }
 
       config {
-        image = "influxdb:2.6-alpine"
+        image = "influxdb:2.7-alpine"
         ports = ["http"]
       }
 
@@ -42,7 +42,7 @@ job "influxdb" {
         provider = "consul"
         tags = [
         "traefik.enable=true",
-        "traefik.http.routers.influxdb.rule=Path(`/`)",
+        "traefik.http.routers.influxdb.rule=Host(`influx.emilsallem.com`)",
         "traefik.http.routers.influxdb.entrypoints=web",
       ]
         
