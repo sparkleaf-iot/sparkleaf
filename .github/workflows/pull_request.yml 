@@ -1,4 +1,5 @@
-name: Pulumi
+name: "Pulumi"
+
 on:
   - pull_request
 jobs:
