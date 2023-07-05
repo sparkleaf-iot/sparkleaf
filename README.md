@@ -17,4 +17,6 @@ Pulumi in golang for IaC, see main.go
 Despite relying on containers for the actual application, a base image is created for vm's that have Consul/Nomad preinstalled. Speeds up boot and scaling. See image.pkr.hcl for details.
 
 ## Deployment
-Deployment requires a GCP account and credentials and pulumi installed on the local machine. Cd into deplyoment and pulumi up should be the only necessairy step. Consul UI can be found on serverip:8500 and nomad on :4646. Traefik dashboard is on clientip:8081.
+Deployment requires a GCP account and credentials and pulumi installed on the local machine. Cd into deplyoment and pulumi up should be the only necessairy step. Consul UI can be found on serverip:8500 and nomad on :4646. Traefik dashboard is on clientip:8081. 
+
+Beware that currently a managed dns zone in GCP is necessary. Change 'sparkleaf-main' to whatever your zone is called in the main.go file.
