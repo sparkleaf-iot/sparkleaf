@@ -22,9 +22,10 @@ jobs:
           service_account: 'github-actions@sparkleaf.iam.gserviceaccount.com'
 
       - run: go mod download
-      - uses: pulumi/actions@v3
+      - uses: pulumi/actions@v4
         with:
           command: preview
-          stack-name: sparkleaf/dev
+          stack-name: dev
+          work-dir: ./deployment
         env:
           PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
