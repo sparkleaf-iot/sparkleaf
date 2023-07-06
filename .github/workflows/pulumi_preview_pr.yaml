@@ -18,7 +18,7 @@ jobs:
         name: 'Authenticate to Google Cloud'
         uses: 'google-github-actions/auth@v1'
         with:
-          workload_identity_provider: 'projects/1076799116380/locations/global/workloadIdentityPools/main-pool/providers/main-provider'
+          workload_identity_provider: 'projects/1076799116380/locations/global/workloadIdentityPools/principal-pool/providers/main-provider'
           service_account: 'github-actions@sparkleaf.iam.gserviceaccount.com'
 
       - run: go mod download
