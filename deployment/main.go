@@ -1,19 +1,10 @@
 package main
 
 import (
-	"bytes"
-	"encoding/base64"
-	"encoding/json"
 	"fmt"
-	"io/ioutil"
-	"log"
-	"net/http"
-	"os"
 	"strconv"
-	"strings"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/pulumi/pulumi-gcp/sdk/v6/go/gcp/compute"
 	"github.com/pulumi/pulumi-gcp/sdk/v6/go/gcp/dns"
 	"github.com/pulumi/pulumi-gcp/sdk/v6/go/gcp/projects"
@@ -24,108 +15,6 @@ import (
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi/config"
 )
 
-func readFileOrPanic(path string, ctx *pulumi.Context) string {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		panic(err.Error())
-	}
-	return string(data)
-}
-
-func getAccessToken(url string, token string) string {
-	// Querying the Consul KV store to fetch the access token
-	client := &http.Client{}
-
-	// Retry till Consul is ready
-	for i := 0; i < 10; i++ {
-		req, err := http.NewRequest("GET", url+"nomad_user_token", nil)
-		if err != nil {
-			log.Fatal(err)
-		}
-		req.Header.Set("Authorization", "Bearer "+token)
-		resp, err := client.Do(req)
-		if err != nil || resp.StatusCode != 200 {
-			time.Sleep(time.Second * 20)
-			log.Println("Retrying...")
-		} else {
-			defer resp.Body.Close()
-			// Read the response body
-			body, err := ioutil.ReadAll(resp.Body)
-			if err != nil {
-				log.Fatal(err)
-			}
-
-			// Extract the value from the response body
-			var response []struct {
-				Value string `json:"Value"`
-			}
-			err = json.Unmarshal(body, &response)
-			if err != nil {
-				log.Fatal(err)
-			}
-
-			if len(response) > 0 {
-				// Resp is base64 encoded, TODO figure out better way
-				value64 := response[0].Value
-				value, err := base64.StdEncoding.DecodeString(value64)
-				if err != nil {
-					log.Fatal(err)
-				}
-
-				return string(value)
-			} else {
-				log.Fatal("Value not found in the response")
-				return ""
-			}
-
-		}
-	}
-
-	return "Timeout error"
-
-}
-
-func setAccountKey(url string, key64 string, token string) []byte {
-	// Querying the Consul KV store to fetch the access token
-	client := &http.Client{}
-	key, err := base64.StdEncoding.DecodeString(key64)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	// Retry till Consul is ready
-	for i := 0; i < 10; i++ {
-		req, err := http.NewRequest(http.MethodPut, url+"service_account", bytes.NewBuffer([]byte(key)))
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		req.Header.Set("Authorization", "Bearer "+token)
-		req.Header.Set("Content-Type", "application/json")
-		resp, err := client.Do(req)
-		if err != nil || resp.StatusCode != 200 {
-			time.Sleep(time.Second * 15)
-			log.Println("Retrying...")
-		} else {
-			body, err := ioutil.ReadAll(resp.Body)
-			if err != nil {
-				log.Fatal(err)
-			}
-			defer resp.Body.Close()
-			return body
-		}
-	}
-
-	return []byte("Timeout error")
-}
-
-func injectToken(token string, toBeReplaced string, script string, amount int) string {
-
-	return strings.Replace(script, toBeReplaced, token, amount)
-}
-func createToken() string {
-	return uuid.NewString()
-}
 func main() {
 	pulumi.Run(func(ctx *pulumi.Context) error {
 		// Get the configuration values from the appropriate yaml.
@@ -140,72 +29,18 @@ func main() {
 		nomad_consul_token_id := pulumi.ToSecret(createToken())
 		nomad_consul_token_secret := pulumi.ToSecret(createToken())
 
-		// Create a new VPC network for the Nomad server.
-		network, err := compute.NewNetwork(ctx, "nomad-network", &compute.NetworkArgs{
-			AutoCreateSubnetworks: pulumi.Bool(true),
-		})
+		network, err := createNetwork(ctx)
 		if err != nil {
 			return err
 		}
-		// Create a firewall rule to allow traffic to the Nomad server.
-		firewall, err := compute.NewFirewall(ctx, "nomad-firewall", &compute.FirewallArgs{
-			Network: network.SelfLink,
-			Allows: compute.FirewallAllowArray{
-				&compute.FirewallAllowArgs{
-					Protocol: pulumi.String("icmp"),
-				},
-
-				&compute.FirewallAllowArgs{
-					Protocol: pulumi.String("tcp"),
-					Ports: pulumi.StringArray{
-						pulumi.String("22"),
-						pulumi.String("4646"),
-						pulumi.String("8500"),
-						pulumi.String("8080"),
-						pulumi.String("8081"),
-						pulumi.String("80"),
-						pulumi.String("8086"),
-					},
-				},
-			},
-			SourceRanges: pulumi.StringArray{
-				pulumi.String("0.0.0.0/0"),
-			},
-		})
+		firewall, err := createFirewall(ctx, network)
 		if err != nil {
 			return err
 		}
-
-		// Create firewall to allow all internal traffic
-
-		internalFirewall, err := compute.NewFirewall(ctx, "internal-firewall", &compute.FirewallArgs{
-			Network: network.SelfLink,
-			SourceTags: pulumi.StringArray{
-				pulumi.String("auto-join"),
-			},
-			Allows: compute.FirewallAllowArray{
-				&compute.FirewallAllowArgs{
-					Protocol: pulumi.String("icmp"),
-				},
-				&compute.FirewallAllowArgs{
-					Protocol: pulumi.String("tcp"),
-					Ports: pulumi.StringArray{
-						pulumi.String("0-65535"),
-					},
-				},
-				&compute.FirewallAllowArgs{
-					Protocol: pulumi.String("udp"),
-					Ports: pulumi.StringArray{
-						pulumi.String("0-65535"),
-					},
-				},
-			},
-		})
-
+		internalFirewall, err := createInternalFirewall(ctx, network)
 		if err != nil {
 			return err
 		}
-
 		serviceAccount, err := serviceaccount.NewAccount(ctx, "serviceAccount", &serviceaccount.AccountArgs{
 			AccountId:   pulumi.String("server-account"),
 			DisplayName: pulumi.String("Vm server service account"),
@@ -358,16 +193,15 @@ func main() {
 			Type:        pulumi.String("A"),
 			Ttl:         pulumi.Int(300),
 			ManagedZone: dnsZone.Name().ApplyT(func(name string) string { return name }).(pulumi.StringOutput),
-			Rrdatas: clientIpArray,
+			Rrdatas:     clientIpArray,
 		})
 		_, err = dns.NewRecordSet(ctx, "influxRecordSet", &dns.RecordSetArgs{
 			Name:        pulumi.String("influx.emilsallem.com."),
 			Type:        pulumi.String("A"),
 			Ttl:         pulumi.Int(300),
 			ManagedZone: dnsZone.Name().ApplyT(func(name string) string { return name }).(pulumi.StringOutput),
-			Rrdatas: clientIpArray,
+			Rrdatas:     clientIpArray,
 		})
-		
 
 		if err != nil {
 			return err
@@ -403,8 +237,6 @@ func main() {
 			return err
 		}
 
-		// traefikJobSpec := readFileOrPanic("jobs/traefik.nomad.hcl", ctx)
-		// traefikJobSpec = injectToken(pulumi.Sprintf("%s", nomad_consul_token_secret), "nomad_consul_token_secret", traefikJobSpec, 1)
 		traefikJobSpec := nomad_consul_token_secret.ApplyT(func(token string) string {
 			return injectToken(token, "nomad_consul_token_secret", readFileOrPanic("jobs/traefik.nomad.hcl", ctx), 1)
 		})
