@@ -44,7 +44,7 @@ sudo cp $CONFIGDIR/consul-client.hcl $CONSULCONFIGDIR
 # Move the config for client setup
 sed -i "s/CONSUL_TOKEN/nomad_consul_token_secret/g" $CONFIGDIR/nomad-client.hcl
 sudo mv $CONFIGDIR/nomad-client.hcl $NOMADCONFIGDIR/nomad-client.hcl
-## Start
+## Start nomad
 sudo systemctl enable nomad.service
 sudo systemctl start nomad.service
 

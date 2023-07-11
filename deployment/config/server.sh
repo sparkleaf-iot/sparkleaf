@@ -17,9 +17,6 @@ INSTANCE_NUMBER=INSTANCE_NUMBER_PLACEHOLDER
 # Consul
 sed -i "s/IP_ADDRESS/$IP_ADDRESS/g" $CONFIGDIR/consul.hcl
 
-#sed -i "s/SERVER_COUNT/$SERVER_COUNT/g" $CONFIGDIR/consul.hcl
-#sed -i "s/RETRY_JOIN/$RETRY_JOIN/g" $CONFIGDIR/consul.hcl
-
 # Add hostname to /etc/hosts
 echo "127.0.0.1 $(hostname)" | sudo tee --append /etc/hosts
 
@@ -42,9 +39,7 @@ sudo touch /ops/config/nomad-output.txt
 
 sudo touch /ops/config/consul-token.txt
 sudo touch /ops/config/consul-output.txt
-#CONSUL_BOOTSTRAP_TOKEN=$(echo $OUTPUT | grep -i secretid | awk '{print $4}')
-#sudo echo $CONSUL_BOOTSTRAP_TOKEN > /ops/config/consul-token.txt
-#sed -i "s/BOOTSTRAP_TOKEN/$CONSUL_BOOTSTRAP_TOKEN/g" $CONSULCONFIGDIR/consul.hcl
+
 # Wait until leader has been elected and bootstrap consul ACLs
 for i in {1..20}; do
     # capture stdout and stderr
@@ -107,8 +102,7 @@ for i in {1..40}; do
     fi
 
 done
-#NOMAD_BOOTSTRAP_TOKEN=$(cat /ops/config/nomad-output.txt | grep -i secret | awk -F '=' '{print $3}' | xargs | sed 's/.....$//' | awk 'NF' )
-#sudo echo $NOMAD_BOOTSTRAP_TOKEN > /ops/config/nomad-token.txt
+
 
 sleep 10
 
@@ -122,6 +116,4 @@ consul kv put -token=$CONSUL_BOOTSTRAP_TOKEN "nomad_user_token" $NOMAD_USER_TOKE
 consul kv put -token=$CONSUL_BOOTSTRAP_TOKEN "consul_bt" $CONSUL_BOOTSTRAP_TOKEN
 
 echo "kv done" >> "/ops/config/nomad-output.txt"
-# Write service account to kv, used for the csi driver plugin
-#DECODED_KEY=$(echo $SERVICE_ACCOUNT | base64 --decode)
-#consul kv put -token=$CONSUL_BOOTSTRAP_TOKEN service_account $DECODED_KEY
+
